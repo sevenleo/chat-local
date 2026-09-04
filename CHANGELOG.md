@@ -3,6 +3,27 @@
 All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/) and versioning follows [SemVer](https://semver.org/).
 
+## [1.3.0] - 2026-09-03
+
+### Added
+- **System stats bar** in the footer (`sysstats.js`) — browser-native only, no extension/native code:
+  - **CPU** via the Compute Pressure API (load levels shown as `●●○○ idle/busy/loaded/maxed` + page FPS), with FPS-only fallback where the API is absent.
+  - **MEM** via `performance.memory` (this tab's JS heap) + `navigator.deviceMemory` (device RAM).
+  - **GPU** chip appears only if the browser honestly reports a GPU pressure signal; otherwise hidden.
+  - Honest labeling via tooltips; missing APIs degrade to `—`, nothing throws.
+
+## [1.2.2] - 2026-09-03
+
+### Changed (UX polish — no structural changes)
+- **Sticky auto-scroll**: while the AI streams, the view follows the output — but stops following if the user scrolls up to read earlier messages.
+- **Streaming caret**: pulsing `▍` at the end of the AI bubble while the answer is being generated; removed on completion.
+- **User bubbles hug content**: capped at 78% width so short messages no longer stretch edge to edge.
+- **Attachment strip overflow**: more than a few chips now scroll inside a capped-height strip instead of pushing the composer off-screen.
+- **Keyboard focus rings**: visible `:focus-visible` outline on all buttons/toggles for accessibility (textarea keeps its composer ring).
+- **Send button stability**: fixed `min-width` so "Send"/"Stop" swap doesn't shift layout.
+- **Scrollbar gutter**: `scrollbar-gutter: stable` prevents horizontal jump when the scrollbar appears.
+- Send-button enable logic unified: `updateSendButton()` now also runs after model ready/download (previously only after text input or attachments).
+
 ## [1.2.1] - 2026-09-03
 
 ### Added

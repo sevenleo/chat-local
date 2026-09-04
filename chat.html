@@ -53,9 +53,16 @@
             <input type="file" id="imageInput" accept="image/*" multiple hidden>
             <input type="file" id="audioInput" accept="audio/*" multiple hidden>
         </div>
+
+        <div id="sysStats" class="sys-stats" title="Browser-visible system stats">
+            <span id="statCpu" class="stat">CPU …</span>
+            <span id="statMem" class="stat">MEM …</span>
+            <span id="statGpu" class="stat" hidden>GPU …</span>
+        </div>
     </footer>
 
     <script defer src="app.js"></script>
+    <script defer src="sysstats.js"></script>
 
 </body>
 </html>

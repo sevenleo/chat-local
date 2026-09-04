@@ -225,6 +225,12 @@
         return dots;
     }
 
+    /** Sticky auto-scroll: follow the stream unless the user scrolled up. */
+    function autoScroll() {
+        const nearBottom = chat.scrollHeight - chat.scrollTop - chat.clientHeight < 120;
+        if (nearBottom) chat.scrollTop = chat.scrollHeight;
+    }
+
     /* ---------- Build multimodal prompt ---------- */
 
     function buildPromptContent(userText) {
@@ -281,7 +287,7 @@
                         ],
                         expectedOutputs: [{ type: "text", languages: ["en"] }],
                     });
-                    sendButton.disabled = false;
+                    updateSendButton();
                     downloadModelButton.disabled = true;
                     break;
 
@@ -335,7 +341,7 @@
             });
 
             setStatus("Model ready", "ok");
-            sendButton.disabled = false;
+            updateSendButton();
             console.log("Model downloaded:", session);
         } catch (error) {
             console.error(error);
@@ -386,6 +392,8 @@
             let completa = "";
             let anterior = "";
 
+            aiContent.classList.add("streaming");
+
             for await (const chunk of stream) {
                 if (anterior && chunk.startsWith(anterior)) {
                     completa = chunk;
@@ -396,9 +404,10 @@
 
                 if (typingDots.parentNode) typingDots.remove();
                 aiContent.textContent = completa;
-                chat.scrollTop = chat.scrollHeight;
+                autoScroll();
             }
 
+            aiContent.classList.remove("streaming");
             setStatus("Model ready", "ok");
         } catch (error) {
             console.error("Generation error:", error);
