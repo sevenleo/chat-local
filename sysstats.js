@@ -1,19 +1,19 @@
-/* ---------- Footer system stats (browser-native only) ----------
-   What a plain web page CAN honestly know (no extensions):
+/* ---------- Footer system stats ----------
+   Auto-detects whether our python server.py is behind the page.
 
-   • CPU  → "Compute Pressure" spec level (nominal/fair/serious/critical)
-            = how loaded/throttled the browser's compute is, plus our own
-            frame-loop FPS as a responsiveness proxy.
-   • MEM  → performance.memory (usedJSHeapSize) = THIS TAB's JS heap,
-            plus navigator.deviceMemory = total device RAM (static, GB).
-   • GPU  → Compute Pressure "gpu" scope if supported (Chrome-only,
-            origin-trial/rolling area — may be absent).
+   /stats answers (python server.py running)
+     → real system stats: CPU %, system RAM (needs psutil); GPU %, VRAM
+       (needs nvidia-smi). Metrics the server can't read fall back to the
+       browser source individually — the bar never lies and never shows "—".
 
-   NOT possible from a web page: true system-wide CPU%, process RAM,
-   real GPU utilization% (those need chrome.system.* (extension API)
-   or native code). We display page/approximate metrics, honestly
-    labelled. If an API is missing, that stat shows as unavailable.
-   --------------------------------------------------------------- */
+   /stats absent (other server, file://, or server not started)
+     → after 3 failed probes, polling stops and the bar runs browser-only:
+        CPU  = Compute Pressure levels (Chrome flag) or page FPS proxy
+        RAM  = this tab's JS heap + total device RAM
+        GPU/VRAM = hidden — a browser cannot honestly measure these
+
+   Browser-only mode dims the bar slightly; hover any chip for the source.
+   ------------------------------------------------ */
 
 (function systemStats() {
     "use strict";
@@ -22,31 +22,37 @@
     const cpuEl  = document.getElementById("statCpu");
     const memEl  = document.getElementById("statMem");
     const gpuEl  = document.getElementById("statGpu");
+    const vramEl = document.getElementById("statVram");
     if (!bar || !cpuEl) return;
 
-    const LEVELS = {
-        nominal:  { label: "idle",    dots: 1, cls: "stat--ok"   },
-        fair:     { label: "busy",    dots: 2, cls: "stat--ok"   },
-        serious:  { label: "loaded",  dots: 3, cls: "stat--warn" },
-        critical: { label: "maxed",   dots: 4, cls: "stat--err"  },
+    const fmtGB = bytes => (bytes / 1073741824).toFixed(1) + " GB";
+    const fmtMB = bytes => {
+        const mb = bytes / 1048576;
+        return mb >= 1024 ? fmtGB(bytes) : Math.round(mb) + " MB";
     };
 
-    function renderLevel(el, level, extra) {
-        const info = LEVELS[level] || LEVELS.nominal;
-        el.className = "stat " + info.cls;
-        el.innerHTML =
-            '<span class="stat-dots">' + "●".repeat(info.dots) +
-            "○".repeat(4 - info.dots) + "</span> " +
-            info.label + (extra ? " · " + extra : "");
+    function setChip(el, html, cls, title) {
+        el.className = "stat stat--" + cls;
+        el.innerHTML = html;
+        el.title = title;
+        el.hidden = false;
     }
 
-    /* ---------- Compute Pressure (CPU + GPU scopes) ----------
-       observe(source, scopes) — spec shape:
-         observe({ sources: { cpu: { min, max } } }, ["cpu"])
-       Chrome currently supports "cpu" only; "gpu" throws NotSupportedError,
-       so we try both and fall back gracefully. Requires secure context
-       (127.0.0.1 counts) + enabled flag/origin trial; wrapped in try/catch. */
-    const pressure = { cpu: "nominal", gpu: null };
+    function loadPct(p) {
+        if (p >= 85) return "err";
+        if (p >= 55) return "warn";
+        return "ok";
+    }
+
+    /* ============ browser probes (always running) ============ */
+
+    const LEVELS = {
+        nominal:  { label: "idle",   dots: 1, cls: "ok"   },
+        fair:     { label: "busy",   dots: 2, cls: "ok"   },
+        serious:  { label: "loaded", dots: 3, cls: "warn" },
+        critical: { label: "maxed",  dots: 4, cls: "err"  },
+    };
+    const pressure = { cpu: "nominal" };
     let pressureOk = false;
 
     if ("ComputePressureObserver" in window && window.isSecureContext) {
@@ -54,33 +60,17 @@
             const obs = new ComputePressureObserver(records => {
                 for (const r of records) {
                     if (r.cpuSignal !== undefined) pressure.cpu = r.cpuSignal;
-                    if (r.gpuSignal !== undefined) pressure.gpu = r.gpuSignal;
                 }
-                update();
             });
-
-            function tryObserve(scopes) {
-                const sources = {};
-                for (const s of scopes) sources[s] = { min: 0.5, max: 0.75 };
-                obs.observe({ sources }, scopes);
-            }
-
-            try { tryObserve(["cpu", "gpu"]); }
-            catch (e) {
-                try { tryObserve(["cpu"]); }
-                catch (e2) { /* no pressure support at all */ }
-            }
+            obs.observe({ sources: { cpu: { min: 0.5, max: 0.75 } } }, ["cpu"]);
             pressureOk = true;
         } catch (e) {
             pressureOk = false;
         }
     }
 
-    /* ---------- FPS proxy for the CPU stat ---------- */
-    let fps = 0;
-    let frames = 0;
-    let lastFpsAt = performance.now();
-
+    /* FPS proxy */
+    let fps = 0, frames = 0, lastFpsAt = performance.now();
     (function loop() {
         frames++;
         const now = performance.now();
@@ -88,59 +78,122 @@
             fps = Math.round(frames * 1000 / (now - lastFpsAt));
             frames = 0;
             lastFpsAt = now;
-            update();
         }
         requestAnimationFrame(loop);
     })();
 
-    /* ---------- Memory ---------- */
-    function fmtMB(bytes) {
-        const mb = bytes / 1048576;
-        return (mb >= 1024 ? (mb / 1024).toFixed(1) + " GB" : Math.round(mb) + " MB");
+    function renderCpuBrowser() {
+        if (pressureOk) {
+            const info = LEVELS[pressure.cpu] || LEVELS.nominal;
+            setChip(cpuEl,
+                "CPU " + "●".repeat(info.dots) + "○".repeat(4 - info.dots) +
+                " " + info.label + " · " + fps + "fps",
+                info.cls,
+                "Browser load pressure (not system %). For real CPU %: python server.py + pip install psutil");
+        } else if (fps > 0) {
+            setChip(cpuEl,
+                "CPU " + fps + "fps",
+                fps >= 50 ? "ok" : fps >= 30 ? "warn" : "err",
+                "Page frame rate — browser-only proxy. For real CPU %: python server.py + pip install psutil");
+        }
+        /* first second before any FPS sample: leave the HTML placeholder */
     }
 
-    function updateMem() {
+    function renderMemBrowser() {
         const pm = performance.memory;
         if (pm && pm.usedJSHeapSize) {
-            let txt = fmtMB(pm.usedJSHeapSize);
+            let txt = "MEM " + fmtMB(pm.usedJSHeapSize);
             if (navigator.deviceMemory) txt += " / " + navigator.deviceMemory + " GB";
-            memEl.innerHTML = txt;
-            memEl.title = "JS heap used by this tab (heap limit " +
-                          fmtMB(pm.jsHeapSizeLimit) + ") · total device RAM";
-            memEl.classList.remove("stat--na");
-        } else {
-            memEl.textContent = "MEM —";
-            memEl.classList.add("stat--na");
-        }
-    }
-    setInterval(updateMem, 2000);
-    updateMem();
-
-    /* ---------- Render ---------- */
-    function update() {
-        if (pressureOk) {
-            renderLevel(cpuEl, pressure.cpu, fps + "fps");
-            cpuEl.title = "Compute pressure (browser load) · page frame-rate";
-        } else {
-            cpuEl.innerHTML = fmtFpsFallback();
-        }
-
-        if (pressure.gpu) {
-            renderLevel(gpuEl, pressure.gpu);
-            gpuEl.title = "GPU compute pressure";
-            gpuEl.hidden = false;
-        } else {
-            gpuEl.hidden = true;   // no honest GPU metric available
+            setChip(memEl, txt, "na",
+                "JS heap of THIS TAB (not system RAM). For real system RAM: python server.py + pip install psutil");
         }
     }
 
-    function fmtFpsFallback() {
-        const cls = fps >= 50 ? "stat--ok" : fps >= 30 ? "stat--warn" : "stat--err";
-        cpuEl.className = "stat " + cls;
-        cpuEl.title = "Page frame rate (proxy for CPU pressure)";
-        return cpuEl.innerHTML = "▶ " + fps + "fps";
+    /* ============ server probe ============ */
+
+    let serverAlive = null;   // null = unproven, true = /stats is ours, false = decided, no server
+    let failCount = 0;
+
+    async function pollServer() {
+        try {
+            const res = await fetch("stats", { cache: "no-store" });
+            if (!res.ok) throw new Error(String(res.status));
+            const d = await res.json();
+            /* shape-check so another server's 404-JSON/endpoint can't fool us */
+            if (!d || d.error || typeof d.at !== "number") throw new Error("not chat-local /stats");
+            serverAlive = true;
+            failCount = 0;
+            return d;
+        } catch (e) {
+            if (++failCount >= 3) serverAlive = false;   // stop polling after 3 strikes
+            return null;
+        }
     }
 
-    update();
-    setInterval(update, 1000);
+    /* ============ render one tick ============ */
+
+    function render(d) {
+        const hasCpu  = d && typeof d.cpuPercent === "number";
+        const hasRam  = d && typeof d.ramUsed === "number";
+        const hasGpu  = d && typeof d.gpuPercent === "number";
+        const hasVram = d && typeof d.vramUsed === "number";
+
+        /* CPU: real % from server, else browser proxy */
+        if (hasCpu) {
+            setChip(cpuEl,
+                "CPU " + Math.round(d.cpuPercent) + "%",
+                loadPct(d.cpuPercent),
+                "Total CPU usage — all cores (server.py + psutil)");
+        } else {
+            renderCpuBrowser();
+        }
+
+        /* RAM: real system RAM from server, else this tab's heap */
+        if (hasRam) {
+            const heap = performance.memory
+                ? " · tab: " + fmtMB(performance.memory.usedJSHeapSize) : "";
+            setChip(memEl,
+                "RAM " + fmtGB(d.ramUsed) + " / " + fmtGB(d.ramTotal) +
+                " (" + Math.round(d.ramPercent) + "%)",
+                loadPct(d.ramPercent),
+                "System memory used/total" + heap);
+        } else {
+            renderMemBrowser();
+        }
+
+        /* GPU / VRAM: server-only — hidden when absent, never faked */
+        if (hasGpu) {
+            setChip(gpuEl,
+                "GPU " + Math.round(d.gpuPercent) + "%",
+                loadPct(d.gpuPercent),
+                (d.gpuName || "GPU") + " — utilization (nvidia-smi)");
+        } else {
+            gpuEl.hidden = true;
+        }
+
+        if (hasVram) {
+            const pct = d.vramTotal ? d.vramUsed / d.vramTotal * 100 : 0;
+            setChip(vramEl,
+                "VRAM " + fmtGB(d.vramUsed) + " / " + fmtGB(d.vramTotal),
+                loadPct(pct),
+                "Graphics memory used/total (nvidia-smi)");
+        } else {
+            vramEl.hidden = true;
+        }
+
+        /* visual cue: dim bar while browser-only */
+        const browserOnly = !hasCpu && !hasRam;
+        bar.classList.toggle("sys-stats--browser", browserOnly);
+        bar.title = browserOnly
+            ? "Browser-only stats. Run: pip install psutil && python server.py — for real CPU/RAM/GPU"
+            : "Real system stats via server.py (missing metrics fall back to browser)";
+    }
+
+    /* ============ boot ============ */
+    render(null);                          // immediate content, no empty bar
+    (async function tick() {
+        const d = serverAlive === false ? null : await pollServer();
+        render(d);
+        setTimeout(tick, 1000);            // keeps FPS/heap fresh even when polling stopped
+    })();
 })();

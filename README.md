@@ -1,17 +1,18 @@
 # Chrome Local AI Chat
 
-**v1.5.1**
+**v1.7.2**
 
-A simple experimental project for testing **Chrome Built-in AI / Prompt API** with a locally executed language model.
+A simple experimental project for testing the **Built-in AI / Prompt API** (Gemini Nano) with a locally executed language model.
 
-The project provides a lightweight ChatGPT-style interface that communicates directly with the AI model available through Google Chrome's on-device AI capabilities.
+The project provides a lightweight ChatGPT-style interface that communicates directly with the AI model available through the browser's on-device AI capabilities — **Google Chrome** as the reference target, **Microsoft Edge** supported with automatic capability fallback.
 
 No external AI API or API key is required.
 
 ## Features
 
-- Local AI inference through Chrome's `LanguageModel` API
-- Gemini Nano / Chrome Built-in AI support
+- Local AI inference through the browser's `LanguageModel` API (Gemini Nano)
+- **Cross-browser**: Chrome 138+ and Microsoft Edge — namespace and input-capability
+  probing with progressive fallback (text+image+audio → text+image → text-only)
 - **Multimodal input**: attach images and audio — with text or alone
 - **Paste & drag-drop**: `Ctrl+V` a screenshot, or drag media files onto the chat
 - **OCR mode**: image attached → model returns only the extracted text
@@ -25,25 +26,40 @@ No external AI API or API key is required.
 - Auto-growing composer, welcome / empty state, responsive layout
 - Sticky auto-scroll during streaming, streaming caret, keyboard focus rings
 - Export / import conversations as self-contained JSON (media embedded, context restored on import)
-- Footer system stats (CPU pressure / page FPS / tab memory) — browser-native only
+- Footer system stats — **real** CPU %, system RAM, GPU % and VRAM (via `server.py` + `psutil`/`nvidia-smi`), with browser-only fallbacks
 - No backend AI service, no API key
 - Local execution using the computer's available hardware acceleration
 
 ## Requirements
 
-- Google Chrome (recent version)
+- **Google Chrome 138+** (Prompt API stable) or **Microsoft Edge** with the
+  built-in AI / Copilot+ features available in your build
 - Enable the built-in AI flags:
-  - `chrome://flags/# optimization-guide-on-device-model` → **Enabled beta**
-  - `chrome://flags/#prompt-for-multimodal-genai` (if present in your build) → **Enabled**
-- On first use, click **Download model** to fetch Gemini Nano (~a few hundred MB, one time)
+  - `chrome://flags/#prompt-api-for-gemini-nano` (or the equivalent Edge flag) → **Enabled**
+  - `chrome://flags/#optimization-guide-on-device-model` → **Enabled Beta**
+  - `chrome://flags/#prompt-for-multimodal-genai` (if present) → **Enabled** —
+    without it, the app auto-degrades to text-only chat
+- On first use, click **Download model** to fetch Gemini Nano (one time)
+
+The app probes the Prompt API namespace (`LanguageModel`, `window.ai.languageModel`)
+and the richest input configuration (text+image+audio → text+image → text-only)
+your browser actually supports — buttons for unsupported media are hidden
+automatically, and chat keeps working.
 
 ## How to run
 
 ```bash
-python server.py
+pip install psutil      # enables real system stats (CPU %, RAM) — recommended
+python server.py        # add --port 9000 to change the port
 ```
 
 Then open: **http://127.0.0.1:8000/chat.html**
+
+The footer status bar **auto-detects** whether `server.py` is running behind the
+page: with it, you get real CPU %, system RAM and (on NVIDIA GPUs, via
+`nvidia-smi`) GPU % / VRAM. Without it, the bar degrades gracefully to
+browser-only approximations (tab heap, page FPS, pressure levels) and hides
+GPU/VRAM entirely — nothing breaks, nothing lies.
 
 ## Usage
 

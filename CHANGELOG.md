@@ -3,6 +3,110 @@
 All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/) and versioning follows [SemVer](https://semver.org/).
 
+## [1.7.2] - 2026-09-04
+
+### Changed
+- `createSession()` no longer logs a `console.warn` per rejected config — those
+  warnings during init are the **expected** Edge capability-probing flow (a
+  multimodal config being refused before the text-only one succeeds) and looked
+  like errors. Failures now accumulate silently and are only logged (as one
+  `console.error`) if **every** config fails.
+
+## [1.7.1] - 2026-09-04
+
+### Fixed
+- **`NotSupportedError` ("device is unable to create session") on Edge**: Edge can
+  report `availability()` as OK yet still reject `create()` when hardware gates
+  (NPU/VRAM/disk) block the requested input stack. All session creation now goes
+  through `createSession()`, which **retries every config from richest to
+  text-only at create() time** — if multimodal is blocked but text works, you get
+  a text chat instead of a dead end.
+- Status now names the working mode: "Model ready (text + image)" etc.
+- "unavailable" logs the exact Edge/Chrome flag URLs needed to enable the API.
+- Import path uses the same resilient `createSession()`.
+
+### Notes
+- On Edge stable without the Prompt API flags (or non-Copilot+ hardware), the
+  honest result is "Model unavailable in this browser" — no page code can
+  install Microsoft's model. Enable: `edge://flags` →
+  `#prompt-api-for-gemini-nano` + `#optimizer-on-device-model`
+  (`BypassPerfRequirement`), then restart Edge. Chrome remains the reference target.
+
+## [1.7.0] - 2026-09-04
+
+### Changed
+- **Cross-browser Prompt API compatibility** (fixes "Model unavailable" on Edge):
+  - The namespace is now **resolved at init** across known spellings —
+    `window.LanguageModel` (Chrome 138+) and `window.ai.languageModel` (older
+    Chromium/Edge origin-trial builds). All calls go through the resolved alias.
+  - **Input-config probing**: availability()/create() are tried against configs
+    from richest to plainest — text+image+audio → text+image → text-only — and
+    the first one the browser accepts becomes the session config. Edge builds
+    whose Gemini Nano lacks multimodal capability now fall back to a working
+    text chat instead of a hard "Model unavailable".
+  - Image/audio attach buttons hide automatically when the active config
+    doesn't support that modality; prompts degrade to a plain string for
+    text-only sessions.
+  - Clear error message (status bar + console) when no Prompt API exists at
+    all, naming the supported browsers.
+
+## [1.6.3] - 2026-09-04
+
+### Fixed
+- **Crash in the request logger** on 404 paths (`favicon.ico`): `SimpleHTTPRequestHandler.log_error`
+  passes an `HTTPStatus` object as the first log arg, and the "/stats" filter called
+  `in` on it → `TypeError: argument of type 'HTTPStatus' is not iterable`. Args are
+  now stringified before matching, so error logging works again.
+- **`favicon.ico` 404 noise** eliminated at the source: the page now declares
+  `<link rel="icon" href="data:,">` (empty inline icon), so the browser stops
+  requesting the file; stray favicon 404s are also kept out of the console log.
+
+## [1.6.2] - 2026-09-03
+
+### Fixed
+- **Guaranteed single-port cleanup on every stop path**: `server.py` now routes
+  SIGINT (Ctrl+C), SIGTERM (taskkill/PID stops) and SIGHUP (console close, Unix)
+  through one shutdown handler that stops `serve_forever()` and closes the
+  listening socket — the port is released promptly instead of lingering until
+  process GC. Verified on Git Bash: SIGTERM closes the port in ≤0.5 s.
+- Note: one port per process by design — each `python server.py` instance owns
+  exactly its own `--port`. Stray instances from earlier manual runs are separate
+  processes (`taskkill /F /IM python.exe` clears them); this change guarantees
+  *its own* port always closes when *it* stops.
+
+## [1.6.1] - 2026-09-03
+
+### Fixed
+- **Stats bar now adapts when `python server.py` is not running** (other static
+  server, `file://`, or no server): after 3 failed `/stats` probes, polling stops
+  and the bar switches permanently to browser-only mode —
+  - CPU: Compute Pressure levels or page-FPS proxy (no more "—" / stale spinner).
+  - RAM: this tab's JS heap + device RAM.
+  - GPU / VRAM: hidden entirely — a browser cannot measure them, so nothing fake
+    or broken-looking is shown.
+  - Each metric is still individually browser-fallback'able when the server
+    answers but lacks psutil/nvidia-smi.
+- `/stats` responses are shape-validated (`app` + numeric `at`), so an unrelated
+  server's 404-JSON page can't be mistaken for our endpoint.
+- Browser-only mode dims the stat bar slightly (visual cue) with the run
+  instructions in its tooltip; hover each chip for its exact source.
+
+## [1.6.0] - 2026-09-03
+
+### Changed
+- **Footer stats now show REAL system metrics** (CPU %, system RAM, GPU %, VRAM).
+  A web page can't read these from the OS — so `server.py` now exposes a same-origin
+  `GET /stats` endpoint using `psutil` (CPU/RAM) and `nvidia-smi` (GPU/VRAM), polled
+  by `sysstats.js` once per second.
+  - **Setup:** `pip install psutil`, then run `python server.py` (as usual).
+    Optional `--port N` flag.
+  - Graceful degradation: without psutil → tab-heap fallback; without nvidia-smi →
+    GPU/VRAM chips show a dim "—" with the reason in the tooltip; opening the page
+    without server.py (double-click) → everything falls back to the old
+    browser-only proxies. `/stats` polling is excluded from server access logs.
+  - New **VRAM** chip; **RAM** chip now shows system used/total (+ %) with the
+    tab's JS heap moved to the tooltip.
+
 ## [1.5.1] - 2026-09-03
 
 ### Fixed

@@ -282,31 +282,127 @@
         return content;
     }
 
+    /* ---------- Model namespace resolution (Chrome / Edge / other Chromium) ---------- */
+
+    /*
+    Resolves the Prompt API namespace across browsers/builds:
+      Chrome (newer):  LanguageModel
+      Chrome/Edge (older origin trials): window.ai.languageModel
+    Everything below goes through `LanguageModel` — a local alias set once at
+    init — so the rest of the file doesn't care which spelling won.
+    */
+    let LanguageModel = null;
+
+    function resolveLanguageModel() {
+        const candidates = [
+            window.LanguageModel,
+            window.ai && window.ai.languageModel,
+        ];
+        for (const ns of candidates) {
+            if (ns && typeof ns.availability === "function") return ns;
+        }
+        return null;
+    }
+
     /* ---------- Check model ---------- */
+
+    /*
+    Cross-browser model config. Chrome/Edge builds differ in which modalities
+    the built-in model accepts, so we probe configs from richest to plainest:
+    the first config availability() accepts becomes the session config.
+    */
+    const MODEL_CONFIGS = [
+        {   // full multimodal
+            label: "text + image + audio",
+            inputs: [
+                { type: "text", languages: ["en"] },
+                { type: "image" },
+                { type: "audio" },
+            ],
+        },
+        {   // text + image (many builds)
+            label: "text + image",
+            inputs: [
+                { type: "text", languages: ["en"] },
+                { type: "image" },
+            ],
+        },
+        {   // text only — the universal floor
+            label: "text only",
+            inputs: [
+                { type: "text", languages: ["en"] },
+            ],
+        },
+    ];
+
+    let activeConfig = null;   // winning entry from MODEL_CONFIGS
+
+    function applyConfigToUI() {
+        const allowImage = activeConfig && activeConfig.inputs.some(i => i.type === "image");
+        const allowAudio = activeConfig && activeConfig.inputs.some(i => i.type === "audio");
+        imageBtn.style.display = allowImage ? "" : "none";
+        audioBtn.style.display = allowAudio ? "" : "none";
+    }
+
+    function sessionOptions(config, extra) {
+        return Object.assign({
+            expectedInputs: config.inputs,
+            expectedOutputs: [{ type: "text", languages: ["en"] }],
+        }, extra || {});
+    }
+
+    /*
+    Create a session with progressive fallback: try the active config, then
+    every smaller one. Edge builds can pass availability() yet still throw
+    NotSupportedError at create() ("device is unable to create session") when
+    hardware gates (NPU/VRAM/disk) block the requested modality stack — a
+    smaller config may still create fine.
+    */
+    async function createSession(extra) {
+        /* Walk configs richest → plainest (MODEL_CONFIGS order); availability()
+           lies on Edge builds (hardware gates apply at create() time), so a
+           create() failure just means "try the next, smaller one". */
+        const attempts = [];
+
+        for (const config of MODEL_CONFIGS) {
+            try {
+                const session = await LanguageModel.create(sessionOptions(config, extra));
+                activeConfig = config;      // remember what actually works
+                applyConfigToUI();
+                return session;
+            } catch (error) {
+                attempts.push(config.label + ": " + error.message);
+            }
+        }
+        /* all configs failed — only now is it worth the noise */
+        console.error("create() failed for all configs —\n  " + attempts.join("\n  "));
+        throw new Error("No session config could be created");
+    }
+
+    async function pickConfig() {
+        // Most builds answer "unavailable" rather than throwing for modalities
+        // they lack; availability() returning something non-error wins in order.
+        for (const config of MODEL_CONFIGS) {
+            try {
+                const availability = await LanguageModel.availability(sessionOptions(config));
+                if (availability !== "unavailable") return config;
+            } catch (e) {
+                /* this spelling/config rejected — try the next, smaller one */
+            }
+        }
+        return null;
+    }
+
     async function checkModel() {
         try {
             setStatus("Checking model…", "idle");
 
-            const availability = await LanguageModel.availability({
-                expectedInputs: [
-                    { type: "text", languages: ["en"] },
-                    { type: "image" },
-                    { type: "audio" },
-                ],
-                expectedOutputs: [{ type: "text", languages: ["en"] }],
-            });
+            const availability = await LanguageModel.availability(sessionOptions(activeConfig || MODEL_CONFIGS[MODEL_CONFIGS.length - 1]));
 
             switch (availability) {
                 case "available":
-                    setStatus("Model ready", "ok");
-                    session = await LanguageModel.create({
-                        expectedInputs: [
-                            { type: "text", languages: ["en"] },
-                            { type: "image" },
-                            { type: "audio" },
-                        ],
-                        expectedOutputs: [{ type: "text", languages: ["en"] }],
-                    });
+                    session = await createSession();
+                    setStatus("Model ready (" + activeConfig.label + ")", "ok");
                     updateSendButton();
                     downloadModelButton.disabled = true;
                     break;
@@ -324,8 +420,12 @@
                     break;
 
                 case "unavailable":
-                    setStatus("Model unavailable", "err");
+                    setStatus("Model unavailable in this browser", "err");
                     sendButton.disabled = true;
+                    console.warn(
+                        "availability() = unavailable. Edge: needs edge://flags/#prompt-api-for-extensions " +
+                        "(Canary/Dev) or Copilot+ hardware; Chrome: chrome://flags/#prompt-api-for-gemini-nano."
+                    );
                     break;
 
                 default:
@@ -345,13 +445,7 @@
 
             setStatus("Starting download…", "warn");
 
-            session = await LanguageModel.create({
-                expectedInputs: [
-                    { type: "text", languages: ["en"] },
-                    { type: "image" },
-                    { type: "audio" },
-                ],
-                expectedOutputs: [{ type: "text", languages: ["en"] }],
+            session = await createSession({
                 monitor(monitor) {
                     monitor.addEventListener("downloadprogress", event => {
                         const percent = Math.round(event.loaded * 100 / event.total);
@@ -360,12 +454,12 @@
                 }
             });
 
-            setStatus("Model ready", "ok");
+            setStatus("Model ready (" + activeConfig.label + ")", "ok");
             updateSendButton();
             console.log("Model downloaded:", session);
         } catch (error) {
             console.error(error);
-            setStatus("Download error", "err");
+            setStatus("Download error — device cannot run the model", "err");
         } finally {
             downloadModelButton.disabled = false;
             checkModelButton.disabled = false;
@@ -408,13 +502,17 @@
         controller = new AbortController();
 
         try {
-            // Build the multimodal prompt array
-            const promptContent = buildPromptContent(userText);
+            // Build the multimodal prompt array; a text-only model gets a
+            // plain string prompt (media can't be attached in that mode).
+            let promptArg = userText;
+            if (attachedFiles.length) {
+                promptArg = [{ role: "user", content: buildPromptContent(userText) }];
+            }
             // Clear attachments from UI now that they're in the prompt
             clearAttachments();
 
             const stream = session.promptStreaming(
-                [{ role: "user", content: promptContent }],
+                promptArg,
                 { signal: controller.signal }
             );
 
@@ -598,26 +696,11 @@
 
             // Recreate the session with the imported context when supported
             try {
-                session = await LanguageModel.create({
-                    initialPrompts,
-                    expectedInputs: [
-                        { type: "text", languages: ["en"] },
-                        { type: "image" },
-                        { type: "audio" },
-                    ],
-                    expectedOutputs: [{ type: "text", languages: ["en"] }],
-                });
+                session = await createSession({ initialPrompts });
                 setStatus("Conversation imported — context restored", "ok");
             } catch (contextError) {
                 console.warn("initialPrompts rejected, starting fresh session:", contextError);
-                session = await LanguageModel.create({
-                    expectedInputs: [
-                        { type: "text", languages: ["en"] },
-                        { type: "image" },
-                        { type: "audio" },
-                    ],
-                    expectedOutputs: [{ type: "text", languages: ["en"] }],
-                });
+                session = await createSession();
                 setStatus("Conversation imported (context not kept)", "warn");
             }
 
@@ -745,7 +828,27 @@
     });
 
     /* ---------- Init ---------- */
-    renderWelcome();
-    checkModel();
+    async function init() {
+        renderWelcome();
+
+        LanguageModel = resolveLanguageModel();
+        if (!LanguageModel) {
+            setStatus("Built-in AI not available in this browser", "err");
+            downloadModelButton.disabled = true;
+            sendButton.disabled = true;
+            console.error(
+                "No Prompt API found (tried: LanguageModel, window.ai.languageModel). " +
+                "Needs Chrome 138+ or Edge with Copilot+ features enabled."
+            );
+            return;
+        }
+
+        // pick the richest input config this browser/model actually accepts
+        activeConfig = await pickConfig();
+        applyConfigToUI();
+        checkModel();
+    }
+
+    init();
 
 })();

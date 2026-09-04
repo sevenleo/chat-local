@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Local AI Chat</title>
+    <link rel="icon" href="data:,">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -57,10 +58,11 @@
             <input type="file" id="importInput" accept=".json,application/json" hidden>
         </div>
 
-        <div id="sysStats" class="sys-stats" title="Browser-visible system stats">
+        <div id="sysStats" class="sys-stats" title="System stats — real values via server.py + psutil / nvidia-smi">
             <span id="statCpu" class="stat">CPU …</span>
-            <span id="statMem" class="stat">MEM …</span>
+            <span id="statMem" class="stat">RAM …</span>
             <span id="statGpu" class="stat" hidden>GPU …</span>
+            <span id="statVram" class="stat" hidden>VRAM …</span>
         </div>
     </footer>
 

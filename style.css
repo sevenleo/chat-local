@@ -465,6 +465,9 @@ textarea::placeholder { color: var(--text-faint); }
 .stat--err  { color: #e57368; }
 .stat--na   { color: var(--text-faint); }
 
+/* dimmed while running in browser-only mode (no python server behind the page) */
+.sys-stats--browser .stat { opacity: 0.65; }
+
 /* ---------- In-message media (user bubble) ---------- */
 .message.user .content { display: flex; flex-direction: column; gap: 8px; }
 .msg-media {
