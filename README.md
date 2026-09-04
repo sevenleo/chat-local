@@ -1,6 +1,6 @@
 # Chrome Local AI Chat
 
-**v1.3.0**
+**v1.5.1**
 
 A simple experimental project for testing **Chrome Built-in AI / Prompt API** with a locally executed language model.
 
@@ -24,6 +24,7 @@ No external AI API or API key is required.
 - Attachment previews, in-message media rendering, typing indicator
 - Auto-growing composer, welcome / empty state, responsive layout
 - Sticky auto-scroll during streaming, streaming caret, keyboard focus rings
+- Export / import conversations as self-contained JSON (media embedded, context restored on import)
 - Footer system stats (CPU pressure / page FPS / tab memory) — browser-native only
 - No backend AI service, no API key
 - Local execution using the computer's available hardware acceleration

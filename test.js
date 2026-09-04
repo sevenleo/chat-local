@@ -30,4 +30,29 @@ assert.strictEqual(
     "Hello, world!"
 );
 
-console.log("OK: streaming chunk logic (incremental + accumulated)");
+// ---- export/import round-trip: payload shape ----
+// Mirrors the schema in app.js exportConversation/importConversation.
+const payload = {
+    app: "chat-local",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    messages: [
+        {
+            role: "user",
+            text: "what is this?",
+            mode: "ocr",
+            media: [{ type: "image", name: "x.png", mime: "image/png", data: Buffer.from("png").toString("base64") }]
+        },
+        { role: "ai", text: "it is an image" }
+    ]
+};
+const parsed = JSON.parse(JSON.stringify(payload));
+assert.strictEqual(parsed.app, "chat-local");
+assert.ok(Array.isArray(parsed.messages) && parsed.messages.length === 2);
+assert.strictEqual(parsed.messages[0].media[0].data, "cG5n");
+assert.deepStrictEqual(
+    Buffer.from(parsed.messages[0].media[0].data, "base64").toString(),
+    "png"
+);
+
+console.log("OK: streaming chunk logic + export/import payload round-trip");

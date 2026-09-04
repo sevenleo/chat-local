@@ -12,6 +12,14 @@
     let generating = false;
     let attachedFiles = [];  // { id, type: "image"|"audio", blob, name, url }
 
+    /*
+    Source of truth for the conversation. Each entry:
+      user → { role:"user", text, mode, media:[{type,blob,name,url}] }
+      ai   → { role:"ai", text }
+    Blobs stay live (no base64) until export serializes them.
+    */
+    const transcript = [];
+
     /* ---------- DOM refs ---------- */
     const chat                = document.getElementById("chat");
     const promptInput         = document.getElementById("prompt");
@@ -31,6 +39,10 @@
     const ocrToggle     = document.getElementById("ocrToggle");
     const transToggle   = document.getElementById("transToggle");
 
+    const exportBtn     = document.getElementById("exportBtn");
+    const importBtn     = document.getElementById("importBtn");
+    const importInput   = document.getElementById("importInput");
+
     /* ---------- Helpers ---------- */
 
     function setStatus(text, kind) {
@@ -47,6 +59,8 @@
 
     function renderWelcome() {
         chat.innerHTML = "";
+        transcript.length = 0;
+        exportBtn.disabled = true;
         const div = document.createElement("div");
         div.className = "welcome";
         div.innerHTML =
@@ -152,6 +166,7 @@
 
         const content = document.createElement("div");
         content.className = "content";
+        if (text) content.textContent = text;
 
         msg.appendChild(avatar);
         msg.appendChild(content);
@@ -161,8 +176,12 @@
         return content;
     }
 
-    /** Create a user message bubble that shows media previews + text. */
-    function createUserMessage(text) {
+    /**
+     * Create a user bubble from a transcript entry.
+     * entry: { text, mode: "ocr"|"transcribe"|"both"|null, media: [{type,name,url}] }
+     * Both the send path and the import path build entries — one renderer.
+     */
+    function createUserMessage(entry) {
         removeWelcome();
         const msg = document.createElement("div");
         msg.className = "message user";
@@ -175,11 +194,12 @@
         bubble.className = "content";
 
         // Attached media previews
-        for (const f of attachedFiles) {
+        for (const f of entry.media) {
             if (f.type === "image") {
                 const img = document.createElement("img");
                 img.src = f.url;
                 img.className = "msg-media";
+                img.alt = f.name;
                 bubble.appendChild(img);
             } else {
                 const tag = document.createElement("div");
@@ -191,8 +211,8 @@
 
         // Labels for OCR / Transcribe
         const labels = [];
-        if (ocrCheck.checked) labels.push("📝 OCR");
-        if (transCheck.checked) labels.push("🎙️ Transcribe");
+        if (entry.mode === "ocr" || entry.mode === "both") labels.push("📝 OCR");
+        if (entry.mode === "transcribe" || entry.mode === "both") labels.push("🎙️ Transcribe");
         if (labels.length) {
             const tag = document.createElement("div");
             tag.className = "msg-badge";
@@ -201,10 +221,10 @@
         }
 
         // Text
-        if (text) {
+        if (entry.text) {
             const t = document.createElement("div");
             t.className = "msg-text";
-            t.textContent = text;
+            t.textContent = entry.text;
             bubble.appendChild(t);
         }
 
@@ -362,8 +382,17 @@
         generating = true;
         removeWelcome();
 
+        // One entry drives both the bubble and the transcript
+        const mode = ocrCheck.checked && transCheck.checked ? "both"
+                   : ocrCheck.checked ? "ocr"
+                   : transCheck.checked ? "transcribe"
+                   : null;
+        const entry = { role: "user", text: userText, mode, media: attachedFiles.slice() };
+        transcript.push(entry);
+        exportBtn.disabled = false;
+
         // Render user message with media previews
-        createUserMessage(userText);
+        createUserMessage(entry);
 
         // Clear input
         promptInput.value = "";
@@ -421,11 +450,16 @@
             }
         } finally {
             if (typingDots.parentNode) typingDots.remove();
+
+            // Record the AI turn (full, partial on stop, or error text)
+            transcript.push({ role: "ai", text: aiContent.textContent });
+            exportBtn.disabled = false;
+
             attachedFiles = [];    // already cleared above, but safety
             controller = null;
             generating = false;
             promptInput.disabled = false;
-            sendButton.disabled = false;
+            updateSendButton();
             stopButton.style.display = "none";
             promptInput.focus();
         }
@@ -434,6 +468,165 @@
     /* ---------- Stop ---------- */
     function stopGeneration() {
         if (controller) controller.abort();
+    }
+
+    /* ---------- Export / Import conversation ---------- */
+
+    function blobToDataUrl(blob) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(reader.error);
+            reader.readAsDataURL(blob);
+        });
+    }
+
+    async function dataUrlToBlob(dataUrl) {
+        const res = await fetch(dataUrl);
+        return res.blob();
+    }
+
+    function timestampSlug() {
+        const d = new Date();
+        const p = n => String(n).padStart(2, "0");
+        return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) +
+               "-" + p(d.getHours()) + p(d.getMinutes());
+    }
+
+    async function exportConversation() {
+        if (transcript.length === 0) return;
+
+        try {
+            const messages = [];
+            for (const entry of transcript) {
+                if (entry.role === "user") {
+                    const media = [];
+                    for (const f of entry.media) {
+                        const dataUrl = await blobToDataUrl(f.blob);
+                        media.push({
+                            type: f.type,
+                            name: f.name,
+                            mime: f.blob.type,
+                            data: dataUrl.split(",")[1]   // strip "data:...;base64,"
+                        });
+                    }
+                    messages.push({ role: "user", text: entry.text, mode: entry.mode, media });
+                } else {
+                    messages.push({ role: "ai", text: entry.text });
+                }
+            }
+
+            const payload = {
+                app: "chat-local",
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                messages
+            };
+
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "chat-local-" + timestampSlug() + ".json";
+            a.click();
+            URL.revokeObjectURL(url);
+
+            setStatus("Conversation exported", "ok");
+        } catch (error) {
+            console.error("Export error:", error);
+            setStatus("Export error", "err");
+        }
+    }
+
+    async function importConversation(file) {
+        if (generating) return;
+
+        let obj;
+        try {
+            obj = JSON.parse(await file.text());
+        } catch (error) {
+            console.error(error);
+            setStatus("Invalid conversation file", "err");
+            return;
+        }
+
+        if (!obj || obj.app !== "chat-local" || !Array.isArray(obj.messages)) {
+            setStatus("Invalid conversation file", "err");
+            return;
+        }
+
+        // Reset the current conversation
+        session = null;
+        chat.innerHTML = "";
+        transcript.length = 0;
+        clearAttachments();
+
+        try {
+            const initialPrompts = [{
+                role: "system",
+                content: "You are a helpful assistant. Continue the conversation below naturally."
+            }];
+
+            for (const msg of obj.messages) {
+                if (msg.role === "user") {
+                    // Decode media back to blobs for previews, transcript and session
+                    const media = [];
+                    const promptContent = [];
+
+                    if (msg.text) promptContent.push({ type: "text", value: msg.text });
+                    for (const m of (msg.media || [])) {
+                        const blob = await dataUrlToBlob("data:" + (m.mime || "") + ";base64," + m.data);
+                        media.push({ type: m.type, blob, name: m.name || "file", url: URL.createObjectURL(blob) });
+                        promptContent.push({ type: m.type, value: blob });
+                    }
+
+                    const entry = { role: "user", text: msg.text || "", mode: msg.mode || null, media };
+                    transcript.push(entry);
+                    createUserMessage(entry);
+
+                    initialPrompts.push({ role: "user", content: promptContent });
+                } else if (msg.role === "ai") {
+                    const text = msg.text || "";
+                    transcript.push({ role: "ai", text });
+                    createMessage("ai", text);
+                    initialPrompts.push({ role: "assistant", content: text });
+                }
+            }
+
+            exportBtn.disabled = transcript.length === 0;
+            chat.scrollTop = chat.scrollHeight;
+
+            // Recreate the session with the imported context when supported
+            try {
+                session = await LanguageModel.create({
+                    initialPrompts,
+                    expectedInputs: [
+                        { type: "text", languages: ["en"] },
+                        { type: "image" },
+                        { type: "audio" },
+                    ],
+                    expectedOutputs: [{ type: "text", languages: ["en"] }],
+                });
+                setStatus("Conversation imported — context restored", "ok");
+            } catch (contextError) {
+                console.warn("initialPrompts rejected, starting fresh session:", contextError);
+                session = await LanguageModel.create({
+                    expectedInputs: [
+                        { type: "text", languages: ["en"] },
+                        { type: "image" },
+                        { type: "audio" },
+                    ],
+                    expectedOutputs: [{ type: "text", languages: ["en"] }],
+                });
+                setStatus("Conversation imported (context not kept)", "warn");
+            }
+
+            updateSendButton();
+            promptInput.focus();
+        } catch (error) {
+            console.error("Import error:", error);
+            setStatus("Import error", "err");
+        }
     }
 
     /* ---------- File picker triggers ---------- */
@@ -532,6 +725,12 @@
     stopButton.addEventListener("click", stopGeneration);
     checkModelButton.addEventListener("click", checkModel);
     downloadModelButton.addEventListener("click", downloadModel);
+    exportBtn.addEventListener("click", exportConversation);
+    importBtn.addEventListener("click", () => importInput.click());
+    importInput.addEventListener("change", () => {
+        if (importInput.files.length) importConversation(importInput.files[0]);
+        importInput.value = "";
+    });
 
     promptInput.addEventListener("keydown", event => {
         if (event.key === "Enter" && !event.shiftKey) {

@@ -3,6 +3,43 @@
 All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/) and versioning follows [SemVer](https://semver.org/).
 
+## [1.5.1] - 2026-09-03
+
+### Fixed
+- **Imported AI messages rendered empty**: `createMessage()` ignored its `text`
+  argument (only the streaming path filled the bubble afterwards), so imported
+  assistant turns appeared as blank bubbles while user messages showed fine.
+  `createMessage()` now renders the text it was given.
+
+## [1.5.0] - 2026-09-03
+
+### Added
+- **Export conversation** — "Export" button in the header downloads a self-contained
+  JSON file (`chat-local-<timestamp>.json`): all messages, OCR/Transcribe mode flags,
+  and image/audio attachments embedded as base64.
+- **Import conversation** — "Import" button loads such a JSON: bubbles and media
+  previews are rebuilt, and the session is recreated with `initialPrompts` so the
+  model **continues the imported context**. If the Chrome build rejects multimodal
+  `initialPrompts`, it falls back to a fresh session with a visible "context not kept"
+  warning — the chat always stays usable.
+- In-memory `transcript` is now the source of truth for the conversation (live blobs,
+  zero base64 cost until export); AI turns are recorded even when stopped or errored.
+
+### Changed
+- `createUserMessage()` now takes a transcript entry — one renderer for both the
+  send path and the import path.
+
+## [1.4.0] - 2026-09-03
+
+### Changed
+- **Real responsive layout (mobile ↔ desktop)**:
+  - `100dvh` body height — footer no longer hidden behind collapsing mobile URL bars.
+  - `viewport-fit=cover` + `env(safe-area-inset-bottom)` — notch/gesture-bar aware.
+  - New tablet breakpoint (≤900px); extended phone breakpoint (≤640px): header buttons
+    flex full-width, status pill truncates, tool/attachment chips shrink, stats bar wraps.
+  - `min(280px, 58vw)` message media — never overflows small screens.
+  - `clamp()` welcome heading; 16px textarea on mobile (stops iOS focus-zoom).
+
 ## [1.3.0] - 2026-09-03
 
 ### Added

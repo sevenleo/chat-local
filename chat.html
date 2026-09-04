@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Local AI Chat</title>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -17,6 +17,8 @@
         <div class="header-buttons">
             <button id="checkModel" class="header-button">Test model</button>
             <button id="downloadModel" class="header-button">Download model</button>
+            <button id="exportBtn" class="header-button" disabled title="Save conversation as JSON">Export</button>
+            <button id="importBtn" class="header-button" title="Load a conversation JSON">Import</button>
         </div>
 
         <span id="status" class="status status--idle">Initializing...</span>
@@ -52,6 +54,7 @@
 
             <input type="file" id="imageInput" accept="image/*" multiple hidden>
             <input type="file" id="audioInput" accept="audio/*" multiple hidden>
+            <input type="file" id="importInput" accept=".json,application/json" hidden>
         </div>
 
         <div id="sysStats" class="sys-stats" title="Browser-visible system stats">
