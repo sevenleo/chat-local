@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/) and versioning follows [SemVer](https://semver.org/).
 
+## [1.2.1] - 2026-09-03
+
+### Added
+- **Clipboard paste** — press `Ctrl+V` anywhere to attach a copied image (screenshot-friendly: unnamed clipboard images get an auto-generated name).
+- **Drag & drop** — drop image and audio files anywhere on the page to attach them; both types are detected by MIME type and routed to the right attachment list.
+- Drop overlay: dashed highlight + hint text shown while dragging over the page.
+
+### Fixed
+- OCR / Transcribe toggles were always visible: author `display` rules overrode the UA `[hidden]` rule. Explicit `.tool-toggle[hidden]` / `#attachments[hidden]` rules added.
+
 ## [1.2.0] - 2026-09-03
 
 ### Added

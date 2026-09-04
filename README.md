@@ -1,6 +1,6 @@
 # Chrome Local AI Chat
 
-**v1.2.0**
+**v1.2.1**
 
 A simple experimental project for testing **Chrome Built-in AI / Prompt API** with a locally executed language model.
 
@@ -13,6 +13,7 @@ No external AI API or API key is required.
 - Local AI inference through Chrome's `LanguageModel` API
 - Gemini Nano / Chrome Built-in AI support
 - **Multimodal input**: attach images and audio — with text or alone
+- **Paste & drag-drop**: `Ctrl+V` a screenshot, or drag media files onto the chat
 - **OCR mode**: image attached → model returns only the extracted text
 - **Transcribe mode**: audio attached → model returns only the speech transcription
 - Streaming responses with correct incremental/accumulated chunk handling
@@ -46,7 +47,8 @@ Then open: **http://127.0.0.1:8000/chat.html**
 1. **Test model** — checks Gemini Nano availability; status pill turns green when ready.
 2. **Download model** — triggers the one-time on-device model download (shows progress %).
 3. Type a message and press **Enter** (or Shift+Enter for a newline).
-4. Click **🖼️** to attach image(s) or **🎵** to attach audio file(s).
+4. Click **🖼️** to attach image(s) or **🎵** to attach audio file(s) —
+   or simply **paste an image with Ctrl+V**, or **drag & drop** images/audio anywhere onto the page.
    - With an image attached, an **OCR** toggle appears — enable it for text-extraction only.
    - With audio attached, a **Transcribe** toggle appears — enable it for transcription only.
    - With neither toggled, media + your text are sent together as a normal question.

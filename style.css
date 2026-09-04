@@ -440,6 +440,30 @@ textarea::placeholder { color: var(--text-faint); }
 }
 .msg-text { white-space: pre-wrap; word-break: break-word; }
 
+/* ---------- Drag & drop overlay ---------- */
+body::after {
+    content: "Drop images or audio to attach";
+    position: fixed;
+    inset: 12px;
+    z-index: 50;
+    display: grid;
+    place-items: center;
+
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--accent);
+    background: rgba(15, 17, 21, 0.85);
+    border: 2px dashed var(--accent-2);
+    border-radius: 20px;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+body.dropping::after { opacity: 1; }
+
 /* ---------- Scrollbar ---------- */
 #chat::-webkit-scrollbar { width: 10px; }
 #chat::-webkit-scrollbar-track { background: transparent; }

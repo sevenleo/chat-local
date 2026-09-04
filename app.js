@@ -441,6 +441,83 @@
         audioInput.value = "";
     });
 
+    /* ---------- Paste image from clipboard ---------- */
+    document.addEventListener("paste", event => {
+        const items = event.clipboardData && event.clipboardData.items;
+        if (!items) return;
+
+        const images = [];
+        for (const item of items) {
+            if (item.kind === "file" && item.type.startsWith("image/")) {
+                const file = item.getAsFile();
+                if (file) {
+                    /* Clipboard screenshots have no real name — give one. */
+                    const named = file.name
+                        ? file
+                        : new File([file], "pasted-image-" +
+                          new Date().toISOString().slice(11, 19).replace(/:/g, "") +
+                          "." + (file.type.split("/")[1] || "png"), { type: file.type });
+                    images.push(named);
+                }
+            }
+        }
+
+        if (images.length) {
+            event.preventDefault();   // don't paste binary junk into the textarea
+            addFiles(images, "image");
+        }
+    });
+
+    /* ---------- Drag & drop images/audio ---------- */
+    let dragCounter = 0;
+
+    function hasMediaFiles(event) {
+        if (!event.dataTransfer) return false;
+        const types = event.dataTransfer.types;
+        return types && Array.from(types).includes("Files");
+    }
+
+    function setDropActive(active) {
+        document.body.classList.toggle("dropping", active);
+    }
+
+    /* Counter-based enter/leave: dragover fires for child elements too. */
+    document.addEventListener("dragenter", event => {
+        if (!hasMediaFiles(event)) return;
+        event.preventDefault();
+        dragCounter++;
+        setDropActive(true);
+    });
+
+    document.addEventListener("dragover", event => {
+        if (!hasMediaFiles(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+    });
+
+    document.addEventListener("dragleave", event => {
+        if (!hasMediaFiles(event)) return;
+        dragCounter = Math.max(0, dragCounter - 1);
+        if (dragCounter === 0) setDropActive(false);
+    });
+
+    document.addEventListener("drop", event => {
+        if (!hasMediaFiles(event)) return;
+        event.preventDefault();
+        dragCounter = 0;
+        setDropActive(false);
+
+        const images = [];
+        const audios = [];
+        for (const file of event.dataTransfer.files) {
+            if (file.type.startsWith("image/")) images.push(file);
+            else if (file.type.startsWith("audio/")) audios.push(file);
+        }
+
+        if (images.length) addFiles(images, "image");
+        if (audios.length) addFiles(audios, "audio");
+    });
+
     /* ---------- Events ---------- */
     sendButton.addEventListener("click", sendMessage);
     stopButton.addEventListener("click", stopGeneration);
