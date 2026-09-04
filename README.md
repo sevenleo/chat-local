@@ -14,7 +14,8 @@ No external AI API or API key is required.
 - Stop/cancel generation
 - Model availability check
 - Model download trigger
-- Simple ChatGPT-style interface
+- Refined dark chat UI (no framework, vanilla CSS/JS)
+- Welcome / empty state
 - No backend AI service
 - No API key
 - Local execution using the computer's available hardware acceleration
@@ -23,6 +24,9 @@ No external AI API or API key is required.
 
 ```text
 GITHUB/
-├── chat.html
-├── server.py
+├── chat.html      ← markup only (loads style.css + app.js)
+├── style.css      ← design system: refined dark theme, no framework
+├── app.js         ← chat logic: Chrome Built-in AI, streaming, stop
+├── server.py      ← static file server (port 8000)
 └── README.md
+```
