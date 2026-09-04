@@ -1,6 +1,6 @@
 /* =========================================================
    Local AI Chat — app.js
-   Chrome Built-in AI · streaming · IIFE · no framework
+   Chrome Built-in AI · streaming · multimodal · no framework
    ========================================================= */
 
 (function () {
@@ -10,33 +10,41 @@
     let session = null;
     let controller = null;
     let generating = false;
+    let attachedFiles = [];  // { id, type: "image"|"audio", blob, name, url }
 
     /* ---------- DOM refs ---------- */
-    const chat              = document.getElementById("chat");
-    const promptInput       = document.getElementById("prompt");
-    const sendButton        = document.getElementById("send");
-    const stopButton        = document.getElementById("stop");
-    const statusEl          = document.getElementById("status");
-    const checkModelButton  = document.getElementById("checkModel");
+    const chat                = document.getElementById("chat");
+    const promptInput         = document.getElementById("prompt");
+    const sendButton          = document.getElementById("send");
+    const stopButton          = document.getElementById("stop");
+    const statusEl            = document.getElementById("status");
+    const checkModelButton    = document.getElementById("checkModel");
     const downloadModelButton = document.getElementById("downloadModel");
+
+    const imageBtn      = document.getElementById("imageBtn");
+    const audioBtn      = document.getElementById("audioBtn");
+    const imageInput    = document.getElementById("imageInput");
+    const audioInput    = document.getElementById("audioInput");
+    const attachmentsEl = document.getElementById("attachments");
+    const ocrCheck      = document.getElementById("ocrOnly");
+    const transCheck    = document.getElementById("transcribeOnly");
+    const ocrToggle     = document.getElementById("ocrToggle");
+    const transToggle   = document.getElementById("transToggle");
 
     /* ---------- Helpers ---------- */
 
-    /** Set status text and its visual state class. */
     function setStatus(text, kind) {
         statusEl.textContent = text;
         statusEl.className = "status";
         if (kind) statusEl.classList.add("status--" + kind);
     }
 
-    /** Auto-grow the textarea to fit content (capped). */
     function autoGrowTextarea() {
         promptInput.style.height = "auto";
         const newHeight = Math.min(promptInput.scrollHeight, 200);
         promptInput.style.height = newHeight + "px";
     }
 
-    /** Render the welcome / empty-state when chat has no messages. */
     function renderWelcome() {
         chat.innerHTML = "";
         const div = document.createElement("div");
@@ -45,22 +53,98 @@
             '<div class="welcome-icon">◆</div>' +
             "<h2>Local AI Chat</h2>" +
             "<p>Your browser&#8217;s built-in AI, right here. No API keys, no cloud — just you and Gemini Nano.</p>" +
-            "<p style='margin-top:12px;font-size:13px;color:var(--text-faint)'>Check the model status above, then start typing.</p>";
+            "<p style='margin-top:12px;font-size:13px;color:var(--text-faint)'>Attach images or audio, type a message, and go.</p>";
         chat.appendChild(div);
     }
 
-    /** Remove the welcome block once the first message arrives. */
     function removeWelcome() {
-        const welcome = chat.querySelector(".welcome");
-        if (welcome) welcome.remove();
+        const w = chat.querySelector(".welcome");
+        if (w) w.remove();
+    }
+
+    /* ---------- Attachments ---------- */
+
+    function renderAttachments() {
+        if (attachedFiles.length === 0) {
+            attachmentsEl.hidden = true;
+            ocrToggle.hidden = true;
+            transToggle.hidden = true;
+            return;
+        }
+
+        attachmentsEl.hidden = false;
+        attachmentsEl.innerHTML = "";
+
+        let hasImage = false;
+        let hasAudio = false;
+
+        for (const f of attachedFiles) {
+            const chip = document.createElement("div");
+            chip.className = "attach-chip";
+
+            if (f.type === "image") {
+                hasImage = true;
+                chip.innerHTML = `<img src="${f.url}" alt="">`;
+            } else {
+                hasAudio = true;
+                chip.innerHTML = `<span class="attach-icon">🎵</span>`;
+            }
+
+            chip.innerHTML += `<span class="attach-name">${f.name}</span>`;
+            chip.innerHTML += `<button class="attach-remove" data-id="${f.id}">&times;</button>`;
+            chip.querySelector(".attach-remove").addEventListener("click", () => removeFile(f.id));
+
+            attachmentsEl.appendChild(chip);
+        }
+
+        // Show OCR toggle only when images are attached, Transcribe only when audio
+        ocrToggle.hidden = !hasImage;
+        transToggle.hidden = !hasAudio;
+    }
+
+    function removeFile(id) {
+        const f = attachedFiles.find(x => x.id === id);
+        if (f) URL.revokeObjectURL(f.url);
+        attachedFiles = attachedFiles.filter(x => x.id !== id);
+        renderAttachments();
+        // Re-check if send should be enabled
+        updateSendButton();
+    }
+
+    function clearAttachments() {
+        for (const f of attachedFiles) URL.revokeObjectURL(f.url);
+        attachedFiles = [];
+        ocrCheck.checked = false;
+        transCheck.checked = false;
+        renderAttachments();
+    }
+
+    function addFiles(fileList, type) {
+        for (const file of fileList) {
+            attachedFiles.push({
+                id: crypto.randomUUID(),
+                type,
+                blob: file,
+                name: file.name,
+                url: URL.createObjectURL(file),
+            });
+        }
+        renderAttachments();
+        updateSendButton();
+    }
+
+    function updateSendButton() {
+        const hasText = promptInput.value.trim().length > 0;
+        const hasFiles = attachedFiles.length > 0;
+        sendButton.disabled = !(hasText || hasFiles) || !session || generating;
     }
 
     /* ---------- Create message bubble ---------- */
+
     function createMessage(type, text) {
         removeWelcome();
-
-        const message = document.createElement("div");
-        message.className = "message " + type;
+        const msg = document.createElement("div");
+        msg.className = "message " + type;
 
         const avatar = document.createElement("div");
         avatar.className = "avatar";
@@ -68,14 +152,67 @@
 
         const content = document.createElement("div");
         content.className = "content";
-        content.textContent = text;
 
-        message.appendChild(avatar);
-        message.appendChild(content);
-        chat.appendChild(message);
+        msg.appendChild(avatar);
+        msg.appendChild(content);
+        chat.appendChild(msg);
 
         chat.scrollTop = chat.scrollHeight;
         return content;
+    }
+
+    /** Create a user message bubble that shows media previews + text. */
+    function createUserMessage(text) {
+        removeWelcome();
+        const msg = document.createElement("div");
+        msg.className = "message user";
+
+        const avatar = document.createElement("div");
+        avatar.className = "avatar";
+        avatar.textContent = "U";
+
+        const bubble = document.createElement("div");
+        bubble.className = "content";
+
+        // Attached media previews
+        for (const f of attachedFiles) {
+            if (f.type === "image") {
+                const img = document.createElement("img");
+                img.src = f.url;
+                img.className = "msg-media";
+                bubble.appendChild(img);
+            } else {
+                const tag = document.createElement("div");
+                tag.className = "msg-audio-tag";
+                tag.textContent = "🎵 " + f.name;
+                bubble.appendChild(tag);
+            }
+        }
+
+        // Labels for OCR / Transcribe
+        const labels = [];
+        if (ocrCheck.checked) labels.push("📝 OCR");
+        if (transCheck.checked) labels.push("🎙️ Transcribe");
+        if (labels.length) {
+            const tag = document.createElement("div");
+            tag.className = "msg-badge";
+            tag.textContent = "Mode: " + labels.join(" + ");
+            bubble.appendChild(tag);
+        }
+
+        // Text
+        if (text) {
+            const t = document.createElement("div");
+            t.className = "msg-text";
+            t.textContent = text;
+            bubble.appendChild(t);
+        }
+
+        msg.appendChild(avatar);
+        msg.appendChild(bubble);
+        chat.appendChild(msg);
+        chat.scrollTop = chat.scrollHeight;
+        return msg;
     }
 
     /* ---------- Typing indicator ---------- */
@@ -88,20 +225,61 @@
         return dots;
     }
 
+    /* ---------- Build multimodal prompt ---------- */
+
+    function buildPromptContent(userText) {
+        const content = [];
+
+        // Build the text prompt
+        const ocr = ocrCheck.checked;
+        const trans = transCheck.checked;
+
+        if (ocr && !trans) {
+            // OCR-only mode — ignore user text for the instruction
+            content.push({ type: "text", value: "Extract all text from this image. Return only the text content, nothing else." });
+        } else if (trans && !ocr) {
+            // Transcribe-only mode
+            content.push({ type: "text", value: "Transcribe all speech from this audio. Return only the transcription, nothing else." });
+        } else if (ocr && trans) {
+            // Both — ask for both
+            content.push({ type: "text", value: "Extract all text from this image AND transcribe all speech from this audio. Return both." });
+        } else {
+            // Normal mode — use user's text, or a default prompt if only media
+            content.push({ type: "text", value: userText || "Describe what is in this media." });
+        }
+
+        // Attach files
+        for (const f of attachedFiles) {
+            content.push({ type: f.type, value: f.blob });
+        }
+
+        return content;
+    }
+
     /* ---------- Check model ---------- */
     async function checkModel() {
         try {
             setStatus("Checking model…", "idle");
 
             const availability = await LanguageModel.availability({
-                expectedOutputs: [{ type: "text", languages: ["en"] }]
+                expectedInputs: [
+                    { type: "text", languages: ["en"] },
+                    { type: "image" },
+                    { type: "audio" },
+                ],
+                expectedOutputs: [{ type: "text", languages: ["en"] }],
             });
 
             switch (availability) {
                 case "available":
                     setStatus("Model ready", "ok");
                     session = await LanguageModel.create({
-                        expectedOutputs: [{ type: "text", languages: ["en"] }]
+                        expectedInputs: [
+                            { type: "text", languages: ["en"] },
+                            { type: "image" },
+                            { type: "audio" },
+                        ],
+                        expectedOutputs: [{ type: "text", languages: ["en"] }],
                     });
                     sendButton.disabled = false;
                     downloadModelButton.disabled = true;
@@ -141,11 +319,12 @@
 
             setStatus("Starting download…", "warn");
 
-            /*
-            Creating a session triggers the model download
-            if it's not yet installed.
-            */
             session = await LanguageModel.create({
+                expectedInputs: [
+                    { type: "text", languages: ["en"] },
+                    { type: "image" },
+                    { type: "audio" },
+                ],
                 expectedOutputs: [{ type: "text", languages: ["en"] }],
                 monitor(monitor) {
                     monitor.addEventListener("downloadprogress", event => {
@@ -169,13 +348,18 @@
 
     /* ---------- Send message ---------- */
     async function sendMessage() {
-        const prompt = promptInput.value.trim();
-        if (!prompt || !session || generating) return;
+        const userText = promptInput.value.trim();
+        const hasFiles = attachedFiles.length > 0;
+        if (!userText && !hasFiles) return;
+        if (!session || generating) return;
 
         generating = true;
         removeWelcome();
 
-        createMessage("user", prompt);
+        // Render user message with media previews
+        createUserMessage(userText);
+
+        // Clear input
         promptInput.value = "";
         promptInput.style.height = "auto";
         promptInput.disabled = true;
@@ -189,29 +373,29 @@
         controller = new AbortController();
 
         try {
-            const stream = session.promptStreaming(prompt, {
-                signal: controller.signal
-            });
+            // Build the multimodal prompt array
+            const promptContent = buildPromptContent(userText);
+            // Clear attachments from UI now that they're in the prompt
+            clearAttachments();
 
-            let respostaCompleta = "";
-            let respostaAnterior  = "";
+            const stream = session.promptStreaming(
+                [{ role: "user", content: promptContent }],
+                { signal: controller.signal }
+            );
+
+            let completa = "";
+            let anterior = "";
 
             for await (const chunk of stream) {
-                /*
-                Support both incremental chunks and
-                accumulated chunks.
-                */
-                if (respostaAnterior && chunk.startsWith(respostaAnterior)) {
-                    respostaCompleta = chunk;     // accumulated: chunk holds full text so far
+                if (anterior && chunk.startsWith(anterior)) {
+                    completa = chunk;
                 } else {
-                    respostaCompleta += chunk;    // incremental: chunk is only the new delta
+                    completa += chunk;
                 }
-                respostaAnterior = respostaCompleta;
+                anterior = completa;
 
-                /* Remove typing dots on first content */
                 if (typingDots.parentNode) typingDots.remove();
-
-                aiContent.textContent = respostaCompleta;
+                aiContent.textContent = completa;
                 chat.scrollTop = chat.scrollHeight;
             }
 
@@ -228,7 +412,7 @@
             }
         } finally {
             if (typingDots.parentNode) typingDots.remove();
-
+            attachedFiles = [];    // already cleared above, but safety
             controller = null;
             generating = false;
             promptInput.disabled = false;
@@ -243,6 +427,20 @@
         if (controller) controller.abort();
     }
 
+    /* ---------- File picker triggers ---------- */
+    imageBtn.addEventListener("click", () => imageInput.click());
+    audioBtn.addEventListener("click", () => audioInput.click());
+
+    imageInput.addEventListener("change", () => {
+        if (imageInput.files.length) addFiles(imageInput.files, "image");
+        imageInput.value = "";
+    });
+
+    audioInput.addEventListener("change", () => {
+        if (audioInput.files.length) addFiles(audioInput.files, "audio");
+        audioInput.value = "";
+    });
+
     /* ---------- Events ---------- */
     sendButton.addEventListener("click", sendMessage);
     stopButton.addEventListener("click", stopGeneration);
@@ -256,7 +454,10 @@
         }
     });
 
-    promptInput.addEventListener("input", autoGrowTextarea);
+    promptInput.addEventListener("input", () => {
+        autoGrowTextarea();
+        updateSendButton();
+    });
 
     /* ---------- Init ---------- */
     renderWelcome();

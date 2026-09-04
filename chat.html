@@ -25,10 +25,33 @@
     <main id="chat"></main>
 
     <footer>
-        <div id="input-area">
-            <textarea id="prompt" rows="1" placeholder="Send a message..."></textarea>
-            <button id="send" disabled>Send</button>
-            <button id="stop">Stop</button>
+        <div id="composer">
+            <div id="attachments" hidden></div>
+
+            <div id="input-area">
+                <div id="tools">
+                    <button id="imageBtn" class="tool-btn" type="button"
+                            title="Add image" aria-label="Add image">🖼️</button>
+                    <button id="audioBtn" class="tool-btn" type="button"
+                            title="Add audio" aria-label="Add audio">🎵</button>
+                    <label id="ocrToggle" class="tool-toggle" hidden>
+                        <input type="checkbox" id="ocrOnly"> OCR
+                    </label>
+                    <label id="transToggle" class="tool-toggle" hidden>
+                        <input type="checkbox" id="transcribeOnly"> Transcribe
+                    </label>
+                </div>
+
+                <textarea id="prompt" rows="1" placeholder="Message, or attach an image / audio…"></textarea>
+
+                <div id="actions">
+                    <button id="send" disabled>Send</button>
+                    <button id="stop">Stop</button>
+                </div>
+            </div>
+
+            <input type="file" id="imageInput" accept="image/*" multiple hidden>
+            <input type="file" id="audioInput" accept="audio/*" multiple hidden>
         </div>
     </footer>
 
