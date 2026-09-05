@@ -27,7 +27,7 @@ No external AI API or API key is required.
 - Auto-growing composer, welcome / empty state, responsive layout
 - Sticky auto-scroll during streaming, streaming caret, keyboard focus rings
 - Export / import conversations as self-contained JSON (media embedded, context restored on import)
-- Footer system stats — **real** CPU %, system RAM, GPU % and VRAM (via `server.py` + `psutil`/`nvidia-smi`); the bar stays hidden when the python server isn't running (browser fps/heap proxies are not shown)
+- Footer status bar — browser CPU pressure/FPS and tab JS heap are always shown when available; real CPU %, system RAM, GPU % and VRAM appear through `server.py` + `psutil`/`nvidia-smi` and are hidden individually when unavailable
 - No backend AI service, no API key
 - Local execution using the computer's available hardware acceleration
 
@@ -56,11 +56,12 @@ python server.py        # add --port 9000 to change the port
 
 Then open: **http://127.0.0.1:8000/chat.html**
 
-The footer status bar **auto-detects** whether `server.py` is running behind the
-page: with it, you get real CPU %, system RAM and (on NVIDIA GPUs, via
-`nvidia-smi`) GPU % / VRAM. Without it, the bar degrades gracefully to
-browser-only approximations (tab heap, page FPS, pressure levels) and hides
-GPU/VRAM entirely — nothing breaks, nothing lies.
+The footer status bar always shows browser-only metrics when supported (tab JS
+heap, page FPS and pressure levels). It also auto-detects whether `server.py`
+is running behind the page: with it, you get real CPU %, system RAM and (on
+NVIDIA GPUs, via `nvidia-smi`) GPU % / VRAM. Without it, only the Python-backed
+chips stay hidden — nothing breaks, nothing pretends browser values are system
+metrics.
 
 ## Usage
 
@@ -87,7 +88,7 @@ chat-local/
 ├── chat.html      ← markup only (loads style.css + app.js + sysstats.js)
 ├── style.css      ← design system: refined dark theme, no framework
 ├── app.js         ← chat logic: multimodal prompts, streaming, stop
-├── sysstats.js    ← footer stats: /stats polling + browser-only fallbacks
+├── sysstats.js    ← footer stats: browser metrics + optional /stats polling
 ├── test.js        ← streaming chunk-fold + export round-trip test (node test.js)
 ├── server.py      ← static file server + /stats system-stats endpoint (port 8000)
 ├── CHANGELOG.md   ← version history

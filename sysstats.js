@@ -1,27 +1,28 @@
 /* ---------- Footer system stats ----------
-   Auto-detects whether our python server.py is behind the page.
+   Browser metrics are always available when the browser exposes them.
+   Python-backed system metrics appear only when our server.py answers /stats.
 
    /stats answers (python server.py running)
      → real system stats: CPU %, system RAM (needs psutil); GPU %, VRAM
-       (needs nvidia-smi). Metrics the server can't read fall back to the
-       browser source individually — the bar never lies and never shows "—".
+       (needs nvidia-smi). Missing Python metrics stay hidden individually.
 
    /stats absent (other server, file://, or server not started)
-     → after 3 failed probes, polling stops and the whole bar stays hidden —
-       the browser can only see page fps / this tab's heap, which are NOT
-       system stats, so showing them would be misleading.
+     → Python-only chips stay hidden while browser CPU pressure/FPS and tab
+       heap continue to be shown when supported.
 
    ------------------------------------------------ */
 
 (function systemStats() {
     "use strict";
 
-    const bar    = document.getElementById("sysStats");
-    const cpuEl  = document.getElementById("statCpu");
-    const memEl  = document.getElementById("statMem");
-    const gpuEl  = document.getElementById("statGpu");
-    const vramEl = document.getElementById("statVram");
-    if (!bar || !cpuEl) return;
+    const bar           = document.getElementById("sysStats");
+    const browserCpuEl  = document.getElementById("statBrowserCpu");
+    const browserMemEl  = document.getElementById("statBrowserMem");
+    const cpuEl         = document.getElementById("statCpu");
+    const memEl         = document.getElementById("statMem");
+    const gpuEl         = document.getElementById("statGpu");
+    const vramEl        = document.getElementById("statVram");
+    if (!bar || !browserCpuEl || !browserMemEl || !cpuEl || !memEl || !gpuEl || !vramEl) return;
 
     const fmtGB = bytes => (bytes / 1073741824).toFixed(1) + " GB";
     const fmtMB = bytes => {
@@ -83,14 +84,14 @@
     function renderCpuBrowser() {
         if (pressureOk) {
             const info = LEVELS[pressure.cpu] || LEVELS.nominal;
-            setChip(cpuEl,
-                "CPU " + "●".repeat(info.dots) + "○".repeat(4 - info.dots) +
+            setChip(browserCpuEl,
+                "CPU browser " + "●".repeat(info.dots) + "○".repeat(4 - info.dots) +
                 " " + info.label + " · " + fps + "fps",
                 info.cls,
                 "Browser load pressure (not system %). For real CPU %: python server.py + pip install psutil");
         } else if (fps > 0) {
-            setChip(cpuEl,
-                "CPU " + fps + "fps",
+            setChip(browserCpuEl,
+                "CPU browser " + fps + "fps",
                 fps >= 50 ? "ok" : fps >= 30 ? "warn" : "err",
                 "Page frame rate — browser-only proxy. For real CPU %: python server.py + pip install psutil");
         }
@@ -100,10 +101,12 @@
     function renderMemBrowser() {
         const pm = performance.memory;
         if (pm && pm.usedJSHeapSize) {
-            let txt = "MEM " + fmtMB(pm.usedJSHeapSize);
+            let txt = "MEM aba " + fmtMB(pm.usedJSHeapSize);
             if (navigator.deviceMemory) txt += " / " + navigator.deviceMemory + " GB";
-            setChip(memEl, txt, "na",
+            setChip(browserMemEl, txt, "na",
                 "JS heap of THIS TAB (not system RAM). For real system RAM: python server.py + pip install psutil");
+        } else {
+            browserMemEl.hidden = true;
         }
     }
 
@@ -124,7 +127,9 @@
             if (!res.ok) throw new Error(String(res.status));
             const d = await res.json();
             /* shape-check so another server's 404-JSON/endpoint can't fool us */
-            if (!d || d.error || typeof d.at !== "number") throw new Error("not chat-local /stats");
+            if (!d || d.app !== "chat-local" || d.error || !Number.isFinite(d.at)) {
+                throw new Error("not chat-local /stats");
+            }
             serverAlive = true;
             failCount = 0;
             return d;
@@ -142,30 +147,22 @@
         const hasGpu  = d && typeof d.gpuPercent === "number";
         const hasVram = d && typeof d.vramUsed === "number";
 
-        /* No python server → hide the whole bar; the browser proxies
-           (fps / tab heap) are not system stats, so we show nothing. */
-        if (!hasCpu && !hasRam) {
-            bar.hidden = true;
-            cpuEl.hidden = true;
-            memEl.hidden = true;
-            gpuEl.hidden = true;
-            vramEl.hidden = true;
-            return;
-        }
-
+        /* Browser metrics are independent of Python and must remain visible. */
         bar.hidden = false;
+        renderCpuBrowser();
+        renderMemBrowser();
 
-        /* CPU: real % from server, else browser proxy (server up, psutil missing) */
+        /* Python metrics are independent chips and hide individually when absent. */
         if (hasCpu) {
             setChip(cpuEl,
                 "CPU " + Math.round(d.cpuPercent) + "%",
                 loadPct(d.cpuPercent),
                 "Total CPU usage — all cores (server.py + psutil)");
         } else {
-            renderCpuBrowser();
+            cpuEl.hidden = true;
         }
 
-        /* RAM: real system RAM from server, else this tab's heap */
+        /* RAM: real system RAM is a separate Python chip; tab heap stays above. */
         if (hasRam) {
             const heap = performance.memory
                 ? " · tab: " + fmtMB(performance.memory.usedJSHeapSize) : "";
@@ -175,7 +172,7 @@
                 loadPct(d.ramPercent),
                 "System memory used/total" + heap);
         } else {
-            renderMemBrowser();
+            memEl.hidden = true;
         }
 
         /* GPU / VRAM: server-only — hidden when absent, never faked */
@@ -198,7 +195,7 @@
             vramEl.hidden = true;
         }
 
-        bar.title = "Real system stats via server.py (missing metrics fall back to browser)";
+        bar.title = "Browser metrics always shown; real system stats via server.py when available";
     }
 
     /* ============ boot ============ */

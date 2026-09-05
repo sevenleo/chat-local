@@ -59,9 +59,11 @@
             <input type="file" id="importInput" accept=".json,application/json" hidden>
         </div>
 
-        <div id="sysStats" class="sys-stats" hidden title="System stats — real values via server.py + psutil / nvidia-smi">
-            <span id="statCpu" class="stat">CPU …</span>
-            <span id="statMem" class="stat">RAM …</span>
+        <div id="sysStats" class="sys-stats" hidden title="Browser metrics always shown; real system stats via server.py when available">
+            <span id="statBrowserCpu" class="stat stat--na">CPU browser …</span>
+            <span id="statBrowserMem" class="stat stat--na">MEM aba …</span>
+            <span id="statCpu" class="stat" hidden>CPU …</span>
+            <span id="statMem" class="stat" hidden>RAM …</span>
             <span id="statGpu" class="stat" hidden>GPU …</span>
             <span id="statVram" class="stat" hidden>VRAM …</span>
         </div>
