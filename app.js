@@ -216,6 +216,52 @@
         setStatus("Media unavailable in text-only mode", "warn");
     }
 
+    function addCopyButton(message, source, disabled = false) {
+        const button = document.createElement("button");
+        button.className = "copy-message";
+        button.type = "button";
+        button.textContent = "⧉";
+        button.title = "Copy message";
+        button.setAttribute("aria-label", "Copy message");
+        button.disabled = disabled;
+
+        let resetTimer = null;
+        button.addEventListener("click", async () => {
+            const text = (source.innerText || source.textContent || "").trim();
+            if (!text) return;
+
+            if (!navigator.clipboard || typeof navigator.clipboard.writeText !== "function") {
+                setStatus("Clipboard unavailable", "err");
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(text);
+                button.textContent = "✓";
+                button.title = "Copied";
+                button.setAttribute("aria-label", "Copied");
+                if (resetTimer) clearTimeout(resetTimer);
+                resetTimer = setTimeout(() => {
+                    button.textContent = "⧉";
+                    button.title = "Copy message";
+                    button.setAttribute("aria-label", "Copy message");
+                }, 1200);
+            } catch (error) {
+                console.error("Copy error:", error);
+                setStatus("Copy failed", "err");
+            }
+        });
+
+        message.appendChild(button);
+        return button;
+    }
+
+    function setCopyButtonState(content, text) {
+        const message = content.closest(".message");
+        const button = message && message.querySelector(".copy-message");
+        if (button) button.disabled = !String(text || "").trim();
+    }
+
     /* Sync everything that reflects the queue: Clear-queue visibility,
        Stop/Skip label, and the "(n queued)" counter in the status line. */
     function updateQueueUI() {
@@ -241,6 +287,9 @@
         else if (text) content.textContent = text;
 
         msg.appendChild(content);
+        if (type === "ai" || String(text || "").trim()) {
+            addCopyButton(msg, content, type === "ai" && !String(text || "").trim());
+        }
         chat.appendChild(msg);
 
         chat.scrollTop = chat.scrollHeight;
@@ -293,6 +342,7 @@
             t.className = "msg-text";
             t.textContent = entry.text;
             bubble.appendChild(t);
+            if (entry.text.trim()) addCopyButton(msg, t);
         }
 
         msg.appendChild(bubble);
@@ -658,6 +708,7 @@
 
                 if (typingDots.parentNode) typingDots.remove();
                 aiContent.innerHTML = renderMarkdown(assistantText);
+                setCopyButtonState(aiContent, assistantText);
                 autoScroll();
             }
 
@@ -677,6 +728,7 @@
             }
         } finally {
             if (typingDots.parentNode) typingDots.remove();
+            setCopyButtonState(aiContent, assistantText);
 
             // Record the AI turn (full, partial on stop, or error text)
             transcript.push({ role: "ai", text: assistantText });

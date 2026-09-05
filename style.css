@@ -371,6 +371,32 @@ body.menu-open .side-menu {
     border: 1px solid var(--border-soft);
 }
 
+.copy-message {
+    flex: 0 0 auto;
+    align-self: flex-end;
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    padding: 0;
+    color: var(--text-faint);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    opacity: 0.7;
+    transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+.copy-message:hover,
+.copy-message:focus-visible {
+    color: var(--accent);
+    background: var(--surface);
+    border-color: var(--border);
+    opacity: 1;
+}
+.copy-message:disabled {
+    opacity: 0.25;
+    cursor: not-allowed;
+}
+
 /* AI bubble */
 .ai .content { background: var(--surface); color: var(--text); border-top-left-radius: 4px; }
 .ai .content > :first-child { margin-top: 0; }

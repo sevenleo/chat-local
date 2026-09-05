@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/) and versioning follows [SemVer](https://semver.org/).
 
+## [1.12.0] - 2026-09-05
+
+### Added
+- Discreet copy buttons beside textual user and assistant messages.
+- Copy feedback and clipboard error handling without adding runtime dependencies.
+
 ## [1.11.1] - 2026-09-05
 
 ### Fixed

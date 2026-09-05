@@ -1,6 +1,6 @@
 # Chrome Local AI Chat
 
-**v1.11.1**
+**v1.12.0**
 
 A small, local-first chat interface for testing the browser's built-in **Prompt API** with Gemini Nano. The browser runs the model on-device; this project provides the UI, media handling, conversation queue, import/export, and optional local system metrics.
 
@@ -29,6 +29,7 @@ No external AI service or API key is required.
 - Progressive capability detection: `text + image + audio`, then `text + image`, then `text only`.
 - Chrome and compatible Edge/Chromium builds, with automatic namespace and capability fallback.
 - Streaming responses with support for both incremental and accumulated chunks.
+- Discreet copy buttons for every textual user and assistant message.
 - Assistant responses render common Markdown: headings, emphasis, lists, links, code, quotes, tables, underline, and ANSI colors.
 - Stop generation while a response is streaming.
 - Message queue: keep sending while the model is busy, skip the current response, cancel individual queued messages, or clear the whole queue.
@@ -48,6 +49,7 @@ No external AI service or API key is required.
 - **AI runtime:** browser-provided Prompt API and Gemini Nano.
 - **Local server:** Python standard library `http.server`.
 - **Optional metrics:** `psutil` for CPU/RAM and `nvidia-smi` for NVIDIA GPU/VRAM.
+- **Server cleanup:** `stop_server.py` uses `psutil` to find project server processes.
 - **Tests:** Node.js built-in `assert` module.
 - **Build system:** none.
 - **Runtime dependencies:** none for chat; `psutil` is optional for real CPU/RAM metrics.
@@ -105,6 +107,15 @@ python server.py
 
 The chat itself does not require `psutil`. Without it, the browser metrics remain available and the unavailable system chips stay hidden.
 
+To find and stop server sessions left running in the background:
+
+```bash
+python stop_server.py --dry-run
+python stop_server.py
+```
+
+The script only targets Python processes running this project's `server.py`, including instances using another port.
+
 ### Opening without Python
 
 The static files can be served by another local HTTP server. The chat still works if the browser exposes the Prompt API, but `server.py`-backed CPU/RAM/GPU/VRAM metrics will not be available. Opening `chat.html` directly with `file://` is also possible for basic static inspection, although browser security and Prompt API restrictions may prevent model access.
@@ -118,6 +129,7 @@ The static files can be served by another local HTTP server. The chat still work
 5. Add media with **🖼️** or **🎵**, paste a screenshot with `Ctrl+V`, or drag image/audio files anywhere onto the page.
 6. Enable **OCR** for image text extraction, **Transcribe** for audio transcription, or both when both media types are attached.
 7. Send the message. The assistant response streams into the chat.
+8. Use the copy button beside any textual message to copy its visible text to the clipboard.
 
 ### Queue controls
 
