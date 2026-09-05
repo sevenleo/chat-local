@@ -61,6 +61,7 @@ body {
     display: flex;
     flex: 1;
     min-width: 0;
+    min-height: 0;
     flex-direction: column;
     transition: margin-right 0.24s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -79,6 +80,7 @@ header {
     position: sticky;
     top: 0;
     z-index: 10;
+    flex-shrink: 0;
 
     display: flex;
     align-items: center;
@@ -305,6 +307,7 @@ body.menu-open .side-menu {
 /* ---------- Chat area ---------- */
 #chat {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     scroll-behavior: smooth;
 
@@ -401,6 +404,7 @@ body.menu-open .side-menu {
 
 /* ---------- Footer / input ---------- */
 footer {
+    flex-shrink: 0;
     border-top: 1px solid var(--border-soft);
     padding: 12px 22px 18px;
     /* safe-area: notch / home-gesture insets on mobile */
