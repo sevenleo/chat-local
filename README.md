@@ -32,19 +32,19 @@ No external AI API or API key is required.
 
 ## Requirements
 
-- **Google Chrome 138+** (Prompt API stable) or **Microsoft Edge** with the
-  built-in AI / Copilot+ features available in your build
-- Enable the built-in AI flags:
-  - `chrome://flags/#prompt-api-for-gemini-nano` (or the equivalent Edge flag) → **Enabled**
-  - `chrome://flags/#optimization-guide-on-device-model` → **Enabled Beta**
+- **Google Chrome 138+** (Prompt API stable) or **Microsoft Edge** (Canary/Dev
+  recommended) with the on-device AI model enabled
+- Enable the required flags:
+  - `chrome://flags/#prompt-api-for-gemini-nano` (or Edge equivalent) → **Enabled**
+  - `chrome://flags/#optimization-guide-on-device-model` → **Enabled BypassPerfRequirement**
   - `chrome://flags/#prompt-for-multimodal-genai` (if present) → **Enabled** —
     without it, the app auto-degrades to text-only chat
 - On first use, click **Download model** to fetch Gemini Nano (one time)
 
-The app probes the Prompt API namespace (`LanguageModel`, `window.ai.languageModel`)
-and the richest input configuration (text+image+audio → text+image → text-only)
-your browser actually supports — buttons for unsupported media are hidden
-automatically, and chat keeps working.
+The app automatically probes the Prompt API namespace (`LanguageModel`,
+`window.ai.languageModel`) and the richest input configuration your browser
+actually supports — media buttons hide when unsupported, and the chat keeps
+working regardless of the browser's capability level.
 
 ## How to run
 
@@ -77,11 +77,12 @@ GPU/VRAM entirely — nothing breaks, nothing lies.
 
 ```text
 chat-local/
-├── chat.html      ← markup only (loads style.css + app.js)
+├── chat.html      ← markup only (loads style.css + app.js + sysstats.js)
 ├── style.css      ← design system: refined dark theme, no framework
 ├── app.js         ← chat logic: multimodal prompts, streaming, stop
-├── test.js        ← streaming chunk-fold regression test (node test.js)
-├── server.py      ← static file server (port 8000)
+├── sysstats.js    ← footer stats: /stats polling + browser-only fallbacks
+├── test.js        ← streaming chunk-fold + export round-trip test (node test.js)
+├── server.py      ← static file server + /stats system-stats endpoint (port 8000)
 ├── CHANGELOG.md   ← version history
 └── README.md
 ```
