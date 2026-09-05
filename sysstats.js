@@ -7,12 +7,10 @@
        browser source individually — the bar never lies and never shows "—".
 
    /stats absent (other server, file://, or server not started)
-     → after 3 failed probes, polling stops and the bar runs browser-only:
-        CPU  = Compute Pressure levels (Chrome flag) or page FPS proxy
-        RAM  = this tab's JS heap + total device RAM
-        GPU/VRAM = hidden — a browser cannot honestly measure these
+     → after 3 failed probes, polling stops and the whole bar stays hidden —
+       the browser can only see page fps / this tab's heap, which are NOT
+       system stats, so showing them would be misleading.
 
-   Browser-only mode dims the bar slightly; hover any chip for the source.
    ------------------------------------------------ */
 
 (function systemStats() {
@@ -111,10 +109,16 @@
 
     /* ============ server probe ============ */
 
+    /* file:// pages can never reach a server — fetch from origin "null" is
+       CORS-blocked before it starts, so skip probing entirely (no console
+       noise) and keep the bar hidden. */
+    const canProbe = location.protocol.startsWith("http");
+
     let serverAlive = null;   // null = unproven, true = /stats is ours, false = decided, no server
     let failCount = 0;
 
     async function pollServer() {
+        if (!canProbe) return null;
         try {
             const res = await fetch("stats", { cache: "no-store" });
             if (!res.ok) throw new Error(String(res.status));
@@ -138,7 +142,20 @@
         const hasGpu  = d && typeof d.gpuPercent === "number";
         const hasVram = d && typeof d.vramUsed === "number";
 
-        /* CPU: real % from server, else browser proxy */
+        /* No python server → hide the whole bar; the browser proxies
+           (fps / tab heap) are not system stats, so we show nothing. */
+        if (!hasCpu && !hasRam) {
+            bar.hidden = true;
+            cpuEl.hidden = true;
+            memEl.hidden = true;
+            gpuEl.hidden = true;
+            vramEl.hidden = true;
+            return;
+        }
+
+        bar.hidden = false;
+
+        /* CPU: real % from server, else browser proxy (server up, psutil missing) */
         if (hasCpu) {
             setChip(cpuEl,
                 "CPU " + Math.round(d.cpuPercent) + "%",
@@ -181,12 +198,7 @@
             vramEl.hidden = true;
         }
 
-        /* visual cue: dim bar while browser-only */
-        const browserOnly = !hasCpu && !hasRam;
-        bar.classList.toggle("sys-stats--browser", browserOnly);
-        bar.title = browserOnly
-            ? "Browser-only stats. Run: pip install psutil && python server.py — for real CPU/RAM/GPU"
-            : "Real system stats via server.py (missing metrics fall back to browser)";
+        bar.title = "Real system stats via server.py (missing metrics fall back to browser)";
     }
 
     /* ============ boot ============ */

@@ -27,7 +27,7 @@ No external AI API or API key is required.
 - Auto-growing composer, welcome / empty state, responsive layout
 - Sticky auto-scroll during streaming, streaming caret, keyboard focus rings
 - Export / import conversations as self-contained JSON (media embedded, context restored on import)
-- Footer system stats — **real** CPU %, system RAM, GPU % and VRAM (via `server.py` + `psutil`/`nvidia-smi`), with browser-only fallbacks
+- Footer system stats — **real** CPU %, system RAM, GPU % and VRAM (via `server.py` + `psutil`/`nvidia-smi`); the bar stays hidden when the python server isn't running (browser fps/heap proxies are not shown)
 - No backend AI service, no API key
 - Local execution using the computer's available hardware acceleration
 

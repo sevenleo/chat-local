@@ -175,15 +175,10 @@
         const msg = document.createElement("div");
         msg.className = "message " + type;
 
-        const avatar = document.createElement("div");
-        avatar.className = "avatar";
-        avatar.textContent = type === "ai" ? "AI" : "U";
-
         const content = document.createElement("div");
         content.className = "content";
         if (text) content.textContent = text;
 
-        msg.appendChild(avatar);
         msg.appendChild(content);
         chat.appendChild(msg);
 
@@ -200,10 +195,6 @@
         removeWelcome();
         const msg = document.createElement("div");
         msg.className = "message user";
-
-        const avatar = document.createElement("div");
-        avatar.className = "avatar";
-        avatar.textContent = "U";
 
         const bubble = document.createElement("div");
         bubble.className = "content";
@@ -243,7 +234,6 @@
             bubble.appendChild(t);
         }
 
-        msg.appendChild(avatar);
         msg.appendChild(bubble);
         chat.appendChild(msg);
         chat.scrollTop = chat.scrollHeight;

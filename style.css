@@ -187,6 +187,9 @@ header {
 }
 .welcome p  { margin: 0; font-size: 14px; line-height: 1.6; }
 
+/* the [hidden] attribute must win over display:flex/inline-flex on chips + bar */
+[hidden] { display: none !important; }
+
 /* ---------- Messages ---------- */
 .message {
     display: flex;
@@ -195,19 +198,6 @@ header {
     max-width: 860px;
     margin: 0 auto;
     animation: rise 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.avatar {
-    width: 34px;
-    height: 34px;
-    flex-shrink: 0;
-    display: grid;
-    place-items: center;
-    border-radius: 9px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.3px;
-    color: #fff;
 }
 
 .content {
@@ -220,12 +210,10 @@ header {
 }
 
 /* AI bubble */
-.ai .avatar  { background: linear-gradient(140deg, var(--accent) 0%, var(--accent-2) 100%); }
 .ai .content { background: var(--surface); color: var(--text); border-top-left-radius: 4px; }
 
-/* user bubble — mirrored */
+/* user bubble — right-aligned */
 .user { flex-direction: row-reverse; }
-.user .avatar  { background: var(--surface-2); color: var(--text-dim); border: 1px solid var(--border); }
 .user .content { background: var(--accent-soft); border-color: rgba(16, 163, 127, 0.25); border-top-right-radius: 4px; }
 
 /* user bubbles shouldn't span full width — hug their content */
@@ -477,9 +465,6 @@ textarea::placeholder { color: var(--text-faint); }
 .stat--err  { color: #e57368; }
 .stat--na   { color: var(--text-faint); }
 
-/* dimmed while running in browser-only mode (no python server behind the page) */
-.sys-stats--browser .stat { opacity: 0.65; }
-
 /* ---------- In-message media (user bubble) ---------- */
 .message.user .content { display: flex; flex-direction: column; gap: 8px; }
 .msg-media {
@@ -628,7 +613,6 @@ textarea:focus-visible { outline: none; }   /* input-area already shows its own 
 
     #chat { padding: 16px 12px 24px; gap: 14px; }
     .message { gap: 9px; }
-    .avatar { width: 30px; height: 30px; font-size: 10px; }
     .content { padding: 10px 13px; }
     .user .content { max-width: 86%; }
 

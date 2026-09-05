@@ -3,6 +3,25 @@
 All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/) and versioning follows [SemVer](https://semver.org/).
 
+## [1.9.0] - 2026-09-05
+
+### Removed
+- **Message avatars** ("AI" / "U" chips) — bubbles are now identified purely
+  by alignment and color (user right/accent, AI left/surface).
+
+### Fixed
+- The `[hidden]` attribute was being overridden by `display:flex` on the stats
+  bar and chips, so "GPU …"/"VRAM …" placeholders could show even without
+  `server.py`. Added a global `[hidden] { display: none !important; }` guard.
+
+## [1.8.1] - 2026-09-05
+
+### Changed
+- The system-stats bar is now **hidden entirely when `server.py` is not
+  running** instead of showing browser-only proxies (page FPS / tab JS heap).
+  Those numbers are not system stats and could be misleading; the bar only
+  appears once `/stats` answers with real data.
+
 ## [1.8.0] - 2026-09-05
 
 ### Added
