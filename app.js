@@ -15,6 +15,7 @@
         removeQueuedItem,
         drainQueue,
         buildImportedPrompt,
+        renderMarkdown,
     } = window.ChatLocalLogic;
 
     /* ---------- State ---------- */
@@ -236,7 +237,8 @@
 
         const content = document.createElement("div");
         content.className = "content";
-        if (text) content.textContent = text;
+        if (type === "ai") content.innerHTML = renderMarkdown(text || "");
+        else if (text) content.textContent = text;
 
         msg.appendChild(content);
         chat.appendChild(msg);
@@ -624,11 +626,13 @@
         const typingDots = showTyping(aiContent);
 
         controller = new AbortController();
+        let assistantText = "";
 
         try {
             if (item.files.length && !supportsMedia(activeConfig, item.files)) {
                 mediaUnavailable();
-                aiContent.textContent = "Message not sent: this session accepts text only.";
+                assistantText = "Message not sent: this session accepts text only.";
+                aiContent.innerHTML = renderMarkdown(assistantText);
                 return;
             }
 
@@ -650,9 +654,10 @@
 
             for await (const chunk of stream) {
                 const completa = foldChunk(foldState, chunk);
+                assistantText = completa;
 
                 if (typingDots.parentNode) typingDots.remove();
-                aiContent.textContent = completa;
+                aiContent.innerHTML = renderMarkdown(assistantText);
                 autoScroll();
             }
 
@@ -662,17 +667,19 @@
             console.error("Generation error:", error);
 
             if (error.name === "AbortError") {
-                aiContent.textContent += "\n\n[Generation stopped]";
+                assistantText += "\n\n[Generation stopped]";
+                aiContent.innerHTML = renderMarkdown(assistantText);
                 setStatus("Generation cancelled", "idle");
             } else {
-                aiContent.textContent = "Error: " + error.message;
+                assistantText = "Error: " + error.message;
+                aiContent.innerHTML = renderMarkdown(assistantText);
                 setStatus("Generation error", "err");
             }
         } finally {
             if (typingDots.parentNode) typingDots.remove();
 
             // Record the AI turn (full, partial on stop, or error text)
-            transcript.push({ role: "ai", text: aiContent.textContent });
+            transcript.push({ role: "ai", text: assistantText });
             exportBtn.disabled = false;
 
             controller = null;

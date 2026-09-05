@@ -4,6 +4,7 @@
 const assert = require("node:assert");
 const {
     foldChunks,
+    renderMarkdown,
     buildPromptContent,
     buildImportedPrompt,
     supportsMedia,
@@ -24,6 +25,47 @@ assert.strictEqual(
     foldChunks(["Hel", "Hello, ", "Hello, wor", "Hello, world!"]),
     "Hello, world!"
 );
+
+// ---- Markdown rendering and safety ----
+const markdown = renderMarkdown([
+    "# Heading",
+    "",
+    "**bold** and *italic* with ~~strike~~",
+    "",
+    "- one",
+    "- two",
+    "",
+    "1. first",
+    "2. second",
+    "",
+    "> quoted",
+    "",
+    "```js",
+    "const value = 1;",
+    "```",
+    "",
+    "[link](https://example.com)",
+    "",
+    "<u>underlined</u>",
+].join("\n"));
+assert.match(markdown, /<h1>Heading<\/h1>/);
+assert.match(markdown, /<strong>bold<\/strong>/);
+assert.match(markdown, /<em>italic<\/em>/);
+assert.match(markdown, /<del>strike<\/del>/);
+assert.match(markdown, /<ul><li>one<\/li><li>two<\/li><\/ul>/);
+assert.match(markdown, /<ol><li>first<\/li><li>second<\/li><\/ol>/);
+assert.match(markdown, /<blockquote><p>quoted<\/p><\/blockquote>/);
+assert.match(markdown, /<pre><code class="language-js">const value = 1;<\/code><\/pre>/);
+assert.match(markdown, /<a href="https:\/\/example\.com"/);
+assert.match(markdown, /<u>underlined<\/u>/);
+assert.strictEqual(renderMarkdown(String.fromCharCode(92) + "*literal" + String.fromCharCode(92) + "*"), "<p>*literal*</p>");
+assert.match(
+    renderMarkdown(String.fromCharCode(92) + "*   " + String.fromCharCode(92) + "**literal" + String.fromCharCode(92) + "**"),
+    /<ul><li><strong>literal<\/strong><\/li><\/ul>/
+);
+assert.match(renderMarkdown("<script>alert(1)</script>"), /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+assert.doesNotMatch(renderMarkdown("[unsafe](javascript:alert(1))"), /href="javascript:/i);
+assert.match(renderMarkdown(String.fromCharCode(92) + "033[31mred" + String.fromCharCode(92) + "033[0m"), /ansi-fg-31/);
 
 // ---- shared prompt construction and capability checks ----
 const image = { type: "image", blob: { name: "image" } };

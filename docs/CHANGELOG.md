@@ -3,6 +3,29 @@
 All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/) and versioning follows [SemVer](https://semver.org/).
 
+## [1.11.1] - 2026-09-05
+
+### Fixed
+- Versioned frontend assets prevent a cached `chat-logic.js` from being mixed
+  with a newer `app.js`, which caused `renderMarkdown is not a function`.
+
+## [1.11.0] - 2026-09-05
+
+### Added
+- Assistant responses now render common Markdown formatting during streaming
+  and after import, including emphasis, lists, links, code, quotes, tables,
+  underline, and ANSI colors.
+- Markdown output is sanitized without adding a runtime dependency; unsafe
+  HTML and link protocols remain escaped or rejected.
+
+### Fixed
+- Markdown markers were previously inserted with `textContent`, so formatting
+  syntax appeared literally and imported assistant messages could not render.
+- The original assistant Markdown is now preserved in the transcript and
+  conversation exports instead of being replaced by rendered DOM text.
+- Over-escaped Markdown emitted by some local models is normalized when the
+  response clearly contains several escaped formatting markers.
+
 ## [1.10.1] - 2026-09-05
 
 ### Changed

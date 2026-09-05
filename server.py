@@ -99,6 +99,14 @@ stats = Stats()
 
 class Handler(SimpleHTTPRequestHandler):
 
+    def end_headers(self):
+        # Keep the static app resources in one version; stale HTML + fresh JS
+        # can otherwise produce incompatible client-side globals.
+        path = self.path.split("?", 1)[0].lower()
+        if path.endswith((".html", ".js", ".css")):
+            self.send_header("Cache-Control", "no-store")
+        super().end_headers()
+
     def log_message(self, fmt, *args):
         # keep the console quiet: don't log the 1-per-second stats polling.
         # fmt may carry non-string objects (e.g. HTTPStatus in error paths),

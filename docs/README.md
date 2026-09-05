@@ -1,6 +1,6 @@
 # Chrome Local AI Chat
 
-**v1.10.1**
+**v1.11.1**
 
 A small, local-first chat interface for testing the browser's built-in **Prompt API** with Gemini Nano. The browser runs the model on-device; this project provides the UI, media handling, conversation queue, import/export, and optional local system metrics.
 
@@ -29,6 +29,7 @@ No external AI service or API key is required.
 - Progressive capability detection: `text + image + audio`, then `text + image`, then `text only`.
 - Chrome and compatible Edge/Chromium builds, with automatic namespace and capability fallback.
 - Streaming responses with support for both incremental and accumulated chunks.
+- Assistant responses render common Markdown: headings, emphasis, lists, links, code, quotes, tables, underline, and ANSI colors.
 - Stop generation while a response is streaming.
 - Message queue: keep sending while the model is busy, skip the current response, cancel individual queued messages, or clear the whole queue.
 - Image and audio attachments through file pickers, clipboard paste, or drag and drop.
@@ -172,7 +173,7 @@ Composer input
   → build string or multimodal Prompt API input
   → session.promptStreaming()
   → fold incremental or accumulated chunks
-  → render the assistant bubble
+  → render sanitized Markdown in the assistant bubble
   → append the completed/partial/error turn to the transcript
 ```
 
@@ -182,7 +183,14 @@ Composer input
 - Prompt API content construction;
 - media capability checks;
 - import validation and prompt reconstruction;
+- sanitized Markdown rendering;
 - queue operations.
+
+### Assistant response formatting
+
+Assistant messages are stored and exported as their original Markdown text, then rendered in the browser. Supported formatting includes headings, bold, italic, strikethrough, unordered and ordered lists, links, fenced code blocks, blockquotes, tables, <u>/<br>, images with safe URLs, emojis, and common ANSI foreground/background colors.
+
+HTML is escaped by default. Only <u> and <br> are allowed through, and links/images reject unsafe protocols such as `javascript:`. Responses with several escaped Markdown markers, a pattern produced by some local models, are normalized for compatibility; isolated escapes remain literal. Markdown rendering is dependency-free and works during streaming as the response grows.
 
 ### Media and modes
 
