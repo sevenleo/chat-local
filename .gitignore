@@ -14,3 +14,6 @@ Thumbs.db
 
 # Exported conversations (self-contained JSON, may contain personal data)
 chat-local-*.json
+
+#AI
+.claude

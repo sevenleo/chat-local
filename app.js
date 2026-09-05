@@ -42,6 +42,9 @@
     const statusEl            = document.getElementById("status");
     const checkModelButton    = document.getElementById("checkModel");
     const downloadModelButton = document.getElementById("downloadModel");
+    const menuToggle          = document.getElementById("menuToggle");
+    const menuClose           = document.getElementById("menuClose");
+    const sideMenu            = document.getElementById("sideMenu");
 
     const imageBtn      = document.getElementById("imageBtn");
     const audioBtn      = document.getElementById("audioBtn");
@@ -65,6 +68,17 @@
         if (kind) statusEl.classList.add("status--" + kind);
     }
 
+    function setMenuOpen(open, restoreFocus = true) {
+        document.body.classList.toggle("menu-open", open);
+        menuToggle.setAttribute("aria-expanded", String(open));
+        menuToggle.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+        menuToggle.title = open ? "Close menu" : "Open menu";
+        sideMenu.setAttribute("aria-hidden", String(!open));
+
+        if (open) menuClose.focus();
+        else if (restoreFocus) menuToggle.focus();
+    }
+
     function autoGrowTextarea() {
         promptInput.style.height = "auto";
         const newHeight = Math.min(promptInput.scrollHeight, 200);
@@ -80,8 +94,8 @@
         div.innerHTML =
             '<div class="welcome-icon">◆</div>' +
             "<h2>Local AI Chat</h2>" +
-            "<p>Your browser&#8217;s built-in AI, right here. No API keys, no cloud — just you and Gemini Nano.</p>" +
-            "<p style='margin-top:12px;font-size:13px;color:var(--text-faint)'>Attach images or audio, type a message, and go.</p>";
+            "<p>Your browser&#8217;s built-in AI.</p>" +
+            "<p class='welcome-note'>No API keys. No cloud.</p>";
         chat.appendChild(div);
     }
 
@@ -460,7 +474,7 @@
             console.error(error);
             setStatus("Error checking model", "err");
         } finally {
-            checkModelButton.disabled = false;
+            checkModelButton.disabled = Boolean(session);
         }
     }
 
@@ -490,7 +504,7 @@
             setStatus("Download error — device cannot run the model", "err");
         } finally {
             downloadModelButton.disabled = Boolean(session);
-            checkModelButton.disabled = false;
+            checkModelButton.disabled = Boolean(session);
         }
     }
 
@@ -947,6 +961,17 @@
     });
 
     /* ---------- Events ---------- */
+    menuToggle.addEventListener("click", () => {
+        setMenuOpen(menuToggle.getAttribute("aria-expanded") !== "true");
+    });
+    menuClose.addEventListener("click", () => setMenuOpen(false));
+    document.addEventListener("keydown", event => {
+        if (event.key === "Escape" && document.body.classList.contains("menu-open")) {
+            event.preventDefault();
+            setMenuOpen(false);
+        }
+    });
+
     sendButton.addEventListener("click", sendMessage);
     stopButton.addEventListener("click", stopGeneration);
     clearQueueBtn.addEventListener("click", clearQueue);
@@ -954,6 +979,9 @@
     downloadModelButton.addEventListener("click", downloadModel);
     exportBtn.addEventListener("click", exportConversation);
     importBtn.addEventListener("click", () => importInput.click());
+    [checkModelButton, downloadModelButton, exportBtn, importBtn].forEach(button => {
+        button.addEventListener("click", () => setMenuOpen(false));
+    });
     importInput.addEventListener("change", () => {
         if (importInput.files.length) importConversation(importInput.files[0]);
         importInput.value = "";

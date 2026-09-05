@@ -1,21 +1,13 @@
 /* ---------- Footer system stats ----------
-   Browser metrics are always available when the browser exposes them.
-   Python-backed system metrics appear only when our server.py answers /stats.
-
-   /stats answers (python server.py running)
-     → real system stats: CPU %, system RAM (needs psutil); GPU %, VRAM
-       (needs nvidia-smi). Missing Python metrics stay hidden individually.
-
-   /stats absent (other server, file://, or server not started)
-     → Python-only chips stay hidden while browser CPU pressure/FPS and tab
-       heap continue to be shown when supported.
-
+   The performance toggle controls both the visible bar and every probe behind
+   it. Python-backed metrics appear only when server.py answers /stats.
    ------------------------------------------------ */
 
 (function systemStats() {
     "use strict";
 
     const bar           = document.getElementById("sysStats");
+    const statsToggle   = document.getElementById("statsToggle");
     const browserCpuEl  = document.getElementById("statBrowserCpu");
     const browserMemEl  = document.getElementById("statBrowserMem");
     const cpuEl         = document.getElementById("statCpu");
@@ -43,8 +35,6 @@
         return "ok";
     }
 
-    /* ============ browser probes (always running) ============ */
-
     const LEVELS = {
         nominal:  { label: "idle",   dots: 1, cls: "ok"   },
         fair:     { label: "busy",   dots: 2, cls: "ok"   },
@@ -52,157 +42,207 @@
         critical: { label: "maxed",  dots: 4, cls: "err"  },
     };
     const pressure = { cpu: "nominal" };
-    let pressureOk = false;
+    const canProbe = location.protocol.startsWith("http");
 
-    if ("ComputePressureObserver" in window && window.isSecureContext) {
-        try {
-            const obs = new ComputePressureObserver(records => {
-                for (const r of records) {
-                    if (r.cpuSignal !== undefined) pressure.cpu = r.cpuSignal;
-                }
-            });
-            obs.observe({ sources: { cpu: { min: 0.5, max: 0.75 } } }, ["cpu"]);
-            pressureOk = true;
-        } catch (e) {
-            pressureOk = false;
+    let enabled = false;
+    let pressureOk = false;
+    let pressureObserver = null;
+    let frameId = null;
+    let tickTimer = null;
+    let fetchController = null;
+    let runId = 0;
+    let fps = 0;
+    let frames = 0;
+    let lastFpsAt = 0;
+    let serverAlive = null;
+    let failCount = 0;
+
+    function startBrowserProbes() {
+        pressureOk = false;
+        pressureObserver = null;
+        if ("ComputePressureObserver" in window && window.isSecureContext) {
+            try {
+                pressureObserver = new ComputePressureObserver(records => {
+                    for (const record of records) {
+                        if (record.cpuSignal !== undefined) pressure.cpu = record.cpuSignal;
+                    }
+                });
+                pressureObserver.observe({ sources: { cpu: { min: 0.5, max: 0.75 } } }, ["cpu"]);
+                pressureOk = true;
+            } catch (e) {
+                pressureObserver = null;
+            }
         }
+
+        fps = 0;
+        frames = 0;
+        lastFpsAt = performance.now();
+        const loop = () => {
+            if (!enabled) {
+                frameId = null;
+                return;
+            }
+
+            frames++;
+            const now = performance.now();
+            if (now - lastFpsAt >= 1000) {
+                fps = Math.round(frames * 1000 / (now - lastFpsAt));
+                frames = 0;
+                lastFpsAt = now;
+            }
+            frameId = requestAnimationFrame(loop);
+        };
+        frameId = requestAnimationFrame(loop);
     }
 
-    /* FPS proxy */
-    let fps = 0, frames = 0, lastFpsAt = performance.now();
-    (function loop() {
-        frames++;
-        const now = performance.now();
-        if (now - lastFpsAt >= 1000) {
-            fps = Math.round(frames * 1000 / (now - lastFpsAt));
-            frames = 0;
-            lastFpsAt = now;
-        }
-        requestAnimationFrame(loop);
-    })();
+    function stopBrowserProbes() {
+        if (frameId !== null) cancelAnimationFrame(frameId);
+        frameId = null;
+        if (pressureObserver) pressureObserver.disconnect();
+        pressureObserver = null;
+        pressureOk = false;
+    }
 
     function renderCpuBrowser() {
-        if (pressureOk) {
+        if (serverAlive === false || !pressureOk) {
+            if (fps > 0) {
+                setChip(browserCpuEl,
+                    "FPS: " + fps,
+                    fps >= 50 ? "ok" : fps >= 30 ? "warn" : "err",
+                    "Page frame rate");
+            }
+        } else {
             const info = LEVELS[pressure.cpu] || LEVELS.nominal;
             setChip(browserCpuEl,
                 "CPU browser " + "●".repeat(info.dots) + "○".repeat(4 - info.dots) +
                 " " + info.label + " · " + fps + "fps",
                 info.cls,
                 "Browser load pressure (not system %). For real CPU %: python server.py + pip install psutil");
-        } else if (fps > 0) {
-            setChip(browserCpuEl,
-                "CPU browser " + fps + "fps",
-                fps >= 50 ? "ok" : fps >= 30 ? "warn" : "err",
-                "Page frame rate — browser-only proxy. For real CPU %: python server.py + pip install psutil");
         }
-        /* first second before any FPS sample: leave the HTML placeholder */
     }
 
     function renderMemBrowser() {
         const pm = performance.memory;
         if (pm && pm.usedJSHeapSize) {
-            let txt = "MEM aba " + fmtMB(pm.usedJSHeapSize);
-            if (navigator.deviceMemory) txt += " / " + navigator.deviceMemory + " GB";
-            setChip(browserMemEl, txt, "na",
-                "JS heap of THIS TAB (not system RAM). For real system RAM: python server.py + pip install psutil");
+            setChip(browserMemEl, "TAB: " + fmtMB(pm.usedJSHeapSize), "na", "Tab memory");
         } else {
             browserMemEl.hidden = true;
         }
     }
 
-    /* ============ server probe ============ */
+    async function pollServer(run) {
+        if (!enabled || !canProbe) return null;
 
-    /* file:// pages can never reach a server — fetch from origin "null" is
-       CORS-blocked before it starts, so skip probing entirely (no console
-       noise) and keep the bar hidden. */
-    const canProbe = location.protocol.startsWith("http");
-
-    let serverAlive = null;   // null = unproven, true = /stats is ours, false = decided, no server
-    let failCount = 0;
-
-    async function pollServer() {
-        if (!canProbe) return null;
+        const requestController = new AbortController();
+        fetchController = requestController;
         try {
-            const res = await fetch("stats", { cache: "no-store" });
+            const res = await fetch("stats", {
+                cache: "no-store",
+                signal: requestController.signal,
+            });
             if (!res.ok) throw new Error(String(res.status));
-            const d = await res.json();
-            /* shape-check so another server's 404-JSON/endpoint can't fool us */
-            if (!d || d.app !== "chat-local" || d.error || !Number.isFinite(d.at)) {
+            const data = await res.json();
+            if (!data || data.app !== "chat-local" || data.error || !Number.isFinite(data.at)) {
                 throw new Error("not chat-local /stats");
             }
+            if (!enabled || run !== runId) return null;
             serverAlive = true;
             failCount = 0;
-            return d;
+            return data;
         } catch (e) {
-            if (++failCount >= 3) serverAlive = false;   // stop polling after 3 strikes
+            if (enabled && run === runId && e.name !== "AbortError") {
+                if (++failCount >= 3) serverAlive = false;
+            }
             return null;
+        } finally {
+            if (fetchController === requestController) fetchController = null;
         }
     }
 
-    /* ============ render one tick ============ */
+    function render(data) {
+        if (!enabled) return;
 
-    function render(d) {
-        const hasCpu  = d && typeof d.cpuPercent === "number";
-        const hasRam  = d && typeof d.ramUsed === "number";
-        const hasGpu  = d && typeof d.gpuPercent === "number";
-        const hasVram = d && typeof d.vramUsed === "number";
+        const hasCpu  = data && typeof data.cpuPercent === "number";
+        const hasRam  = data && typeof data.ramUsed === "number";
+        const hasGpu  = data && typeof data.gpuPercent === "number";
+        const hasVram = data && typeof data.vramUsed === "number";
 
-        /* Browser metrics are independent of Python and must remain visible. */
         bar.hidden = false;
         renderCpuBrowser();
         renderMemBrowser();
 
-        /* Python metrics are independent chips and hide individually when absent. */
         if (hasCpu) {
             setChip(cpuEl,
-                "CPU " + Math.round(d.cpuPercent) + "%",
-                loadPct(d.cpuPercent),
+                "CPU " + Math.round(data.cpuPercent) + "%",
+                loadPct(data.cpuPercent),
                 "Total CPU usage — all cores (server.py + psutil)");
         } else {
             cpuEl.hidden = true;
         }
 
-        /* RAM: real system RAM is a separate Python chip; tab heap stays above. */
         if (hasRam) {
-            const heap = performance.memory
-                ? " · tab: " + fmtMB(performance.memory.usedJSHeapSize) : "";
             setChip(memEl,
-                "RAM " + fmtGB(d.ramUsed) + " / " + fmtGB(d.ramTotal) +
-                " (" + Math.round(d.ramPercent) + "%)",
-                loadPct(d.ramPercent),
-                "System memory used/total" + heap);
+                "RAM: " + fmtGB(data.ramUsed) + " / " + fmtGB(data.ramTotal),
+                loadPct(data.ramPercent),
+                "System memory used/total");
         } else {
             memEl.hidden = true;
         }
 
-        /* GPU / VRAM: server-only — hidden when absent, never faked */
         if (hasGpu) {
             setChip(gpuEl,
-                "GPU " + Math.round(d.gpuPercent) + "%",
-                loadPct(d.gpuPercent),
-                (d.gpuName || "GPU") + " — utilization (nvidia-smi)");
+                "GPU " + Math.round(data.gpuPercent) + "%",
+                loadPct(data.gpuPercent),
+                (data.gpuName || "GPU") + " — utilization (nvidia-smi)");
         } else {
             gpuEl.hidden = true;
         }
 
         if (hasVram) {
-            const pct = d.vramTotal ? d.vramUsed / d.vramTotal * 100 : 0;
+            const pct = data.vramTotal ? data.vramUsed / data.vramTotal * 100 : 0;
             setChip(vramEl,
-                "VRAM " + fmtGB(d.vramUsed) + " / " + fmtGB(d.vramTotal),
+                "VRAM " + fmtGB(data.vramUsed) + " / " + fmtGB(data.vramTotal),
                 loadPct(pct),
                 "Graphics memory used/total (nvidia-smi)");
         } else {
             vramEl.hidden = true;
         }
 
-        bar.title = "Browser metrics always shown; real system stats via server.py when available";
+        bar.title = "Browser metrics and optional system stats from server.py";
     }
 
-    /* ============ boot ============ */
-    render(null);                          // immediate content, no empty bar
-    (async function tick() {
-        const d = serverAlive === false ? null : await pollServer();
-        render(d);
-        setTimeout(tick, 1000);            // keeps FPS/heap fresh even when polling stopped
-    })();
+    async function tick(run) {
+        if (!enabled || run !== runId) return;
+        const data = serverAlive === false ? null : await pollServer(run);
+        if (!enabled || run !== runId) return;
+        render(data);
+        tickTimer = setTimeout(() => tick(run), 1000);
+    }
+
+    function setEnabled(next) {
+        if (enabled === next && (next ? tickTimer !== null || frameId !== null : bar.hidden)) return;
+
+        enabled = next;
+        runId++;
+        if (tickTimer !== null) clearTimeout(tickTimer);
+        tickTimer = null;
+        if (fetchController) fetchController.abort();
+        stopBrowserProbes();
+
+        if (!enabled) {
+            bar.hidden = true;
+            return;
+        }
+
+        serverAlive = null;
+        failCount = 0;
+        startBrowserProbes();
+        render(null);
+        tick(runId);
+    }
+
+    if (statsToggle) {
+        statsToggle.addEventListener("change", () => setEnabled(statsToggle.checked));
+    }
+    setEnabled(statsToggle ? statsToggle.checked : true);
 })();

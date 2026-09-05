@@ -3,6 +3,24 @@
 All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/) and versioning follows [SemVer](https://semver.org/).
 
+## [1.10.1] - 2026-09-05
+
+### Changed
+- Neutralized the page background to a darker graphite tone and softened the
+  emerald accents across controls, status indicators, and the favicon.
+
+## [1.10.0] - 2026-09-05
+
+### Added
+- Retractable right-side menu for model testing, downloading, import and export.
+- **Show performance metrics** checkbox that hides the footer metrics and pauses
+  browser probes, FPS sampling, memory reads and `/stats` polling.
+- Matching `favicon.svg` based on the Local AI Chat diamond mark.
+
+### Changed
+- Reduced the empty-state message to a shorter local-first introduction.
+- Refined the dark emerald UI and responsive layout for a cleaner browser experience.
+
 ## [1.9.1] - 2026-09-05
 
 ### Fixed
