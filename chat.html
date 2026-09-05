@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Local AI Chat</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="style.css?v=1.11.1">
+    <link rel="stylesheet" href="style.css?v=1.13.0">
 </head>
 <body>
 
@@ -17,6 +17,11 @@
             </div>
 
             <div class="header-actions">
+                <button id="newChatButton" class="new-chat-button" type="button"
+                        aria-label="Start a new chat" title="Start a new chat">
+                    <span class="new-chat-button__icon" aria-hidden="true">↺</span>
+                    <span class="new-chat-button__label">New chat</span>
+                </button>
                 <span id="status" class="status status--idle">Initializing...</span>
                 <button id="menuToggle" class="menu-toggle" type="button"
                         aria-expanded="false" aria-controls="sideMenu" aria-label="Open menu"
@@ -112,9 +117,26 @@
         </label>
     </aside>
 
-    <script defer src="chat-logic.js?v=1.11.1"></script>
-    <script defer src="app.js?v=1.11.1"></script>
-    <script defer src="sysstats.js?v=1.11.1"></script>
+    <dialog id="newChatDialog" class="new-chat-dialog" aria-labelledby="newChatTitle"
+            aria-describedby="newChatDescription">
+        <form method="dialog" class="new-chat-dialog__panel">
+            <p class="eyebrow">Conversation</p>
+            <h2 id="newChatTitle">Start a new chat?</h2>
+            <p id="newChatDescription">
+                This will clear the conversation, queued messages, draft, and attachments.
+            </p>
+            <div class="new-chat-dialog__actions">
+                <button class="new-chat-dialog__button new-chat-dialog__button--cancel"
+                        value="cancel" type="submit">Cancel</button>
+                <button class="new-chat-dialog__button new-chat-dialog__button--confirm"
+                        value="confirm" type="submit">New chat</button>
+            </div>
+        </form>
+    </dialog>
+
+    <script defer src="chat-logic.js?v=1.13.0"></script>
+    <script defer src="app.js?v=1.13.0"></script>
+    <script defer src="sysstats.js?v=1.13.0"></script>
 
 </body>
 </html>

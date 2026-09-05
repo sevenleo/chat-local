@@ -23,6 +23,8 @@
     let controller = null;
     let generating = false;
     let importing = false;
+    let resetting = false;
+    let activeGeneration = null;
     let attachedFiles = [];  // { id, type: "image"|"audio", blob, name, url }
     const pendingQueue = []; // { id, text, mode, ocr, trans, files, entry, bubbleEl }
 
@@ -41,6 +43,8 @@
     const stopButton          = document.getElementById("stop");
     const clearQueueBtn       = document.getElementById("clearQueue");
     const statusEl            = document.getElementById("status");
+    const newChatButton       = document.getElementById("newChatButton");
+    const newChatDialog       = document.getElementById("newChatDialog");
     const checkModelButton    = document.getElementById("checkModel");
     const downloadModelButton = document.getElementById("downloadModel");
     const menuToggle          = document.getElementById("menuToggle");
@@ -208,7 +212,7 @@
     function updateSendButton() {
         const hasText = promptInput.value.trim().length > 0;
         const hasFiles = attachedFiles.length > 0;
-        sendButton.disabled = !(hasText || hasFiles) || !session;
+        sendButton.disabled = !(hasText || hasFiles) || !session || resetting;
         sendButton.textContent = generating ? "Queue" : "Send";
     }
 
@@ -216,7 +220,7 @@
         setStatus("Media unavailable in text-only mode", "warn");
     }
 
-    function addCopyButton(message, source, disabled = false) {
+    function addCopyButton(message, getText, disabled = false) {
         const button = document.createElement("button");
         button.className = "copy-message";
         button.type = "button";
@@ -227,8 +231,8 @@
 
         let resetTimer = null;
         button.addEventListener("click", async () => {
-            const text = (source.innerText || source.textContent || "").trim();
-            if (!text) return;
+            const text = String(getText() ?? "");
+            if (!text.trim()) return;
 
             if (!navigator.clipboard || typeof navigator.clipboard.writeText !== "function") {
                 setStatus("Clipboard unavailable", "err");
@@ -257,6 +261,7 @@
     }
 
     function setCopyButtonState(content, text) {
+        content.dataset.copyText = String(text ?? "");
         const message = content.closest(".message");
         const button = message && message.querySelector(".copy-message");
         if (button) button.disabled = !String(text || "").trim();
@@ -266,6 +271,7 @@
        Stop/Skip label, and the "(n queued)" counter in the status line. */
     function updateQueueUI() {
         clearQueueBtn.hidden = pendingQueue.length === 0;
+        if (resetting) return;
         if (generating) {
             const hasQueue = pendingQueue.length > 0;
             stopButton.textContent = hasQueue ? "Skip ⏭" : "Stop";
@@ -283,12 +289,17 @@
 
         const content = document.createElement("div");
         content.className = "content";
+        content.dataset.copyText = String(text ?? "");
         if (type === "ai") content.innerHTML = renderMarkdown(text || "");
         else if (text) content.textContent = text;
 
         msg.appendChild(content);
         if (type === "ai" || String(text || "").trim()) {
-            addCopyButton(msg, content, type === "ai" && !String(text || "").trim());
+            addCopyButton(
+                msg,
+                () => content.dataset.copyText || "",
+                type === "ai" && !String(text || "").trim()
+            );
         }
         chat.appendChild(msg);
 
@@ -337,15 +348,17 @@
         }
 
         // Text
+        let copySource = null;
         if (entry.text) {
             const t = document.createElement("div");
             t.className = "msg-text";
             t.textContent = entry.text;
             bubble.appendChild(t);
-            if (entry.text.trim()) addCopyButton(msg, t);
+            if (entry.text.trim()) copySource = t;
         }
 
         msg.appendChild(bubble);
+        if (copySource) addCopyButton(msg, () => copySource.textContent || "");
         chat.appendChild(msg);
         chat.scrollTop = chat.scrollHeight;
         return msg;
@@ -483,7 +496,7 @@
     }
 
     async function checkModel() {
-        if (generating || pendingQueue.length || importing) return;
+        if (generating || pendingQueue.length || importing || resetting) return;
         checkModelButton.disabled = true;
         try {
             setStatus("Checking model…", "idle");
@@ -532,7 +545,7 @@
 
     /* ---------- Download model ---------- */
     async function downloadModel() {
-        if (session || generating || pendingQueue.length || importing) return;
+        if (session || generating || pendingQueue.length || importing || resetting) return;
         try {
             downloadModelButton.disabled = true;
             checkModelButton.disabled = true;
@@ -611,7 +624,7 @@
         const userText = promptInput.value.trim();
         const hasFiles = attachedFiles.length > 0;
         if (!userText && !hasFiles) return;
-        if (!session) return;
+        if (!session || resetting) return;
         if (hasFiles && !supportsMedia(activeConfig, attachedFiles)) {
             mediaUnavailable();
             return;
@@ -650,7 +663,7 @@
     }
 
     async function runQueue() {
-        if (generating) return;
+        if (generating || resetting) return;
 
         while (pendingQueue.length) {
             const item = dequeue(pendingQueue);
@@ -662,7 +675,13 @@
             exportBtn.disabled = false;
             updateQueueUI();
 
-            await runGeneration(item);
+            const generation = runGeneration(item);
+            activeGeneration = generation;
+            try {
+                await generation;
+            } finally {
+                if (activeGeneration === generation) activeGeneration = null;
+            }
         }
     }
 
@@ -747,6 +766,78 @@
     /* ---------- Stop ---------- */
     function stopGeneration() {
         if (controller) controller.abort();
+    }
+
+    /* ---------- New chat ---------- */
+    async function resetConversation() {
+        if (resetting || importing) return;
+
+        resetting = true;
+        newChatButton.disabled = true;
+        updateSendButton();
+
+        const previousSession = session;
+        if (previousSession) setStatus("Starting new chat…", "idle");
+
+        if (controller) controller.abort();
+        if (previousSession) {
+            try {
+                previousSession.destroy();
+            } catch (error) {
+                console.error("Session destroy error:", error);
+            }
+            session = null;
+        }
+
+        clearQueue();
+
+        if (activeGeneration) {
+            try {
+                await activeGeneration;
+            } catch (error) {
+                console.error("Generation cleanup error:", error);
+            }
+        }
+
+        releaseMedia(transcript);
+        clearAttachments();
+        promptInput.value = "";
+        promptInput.style.height = "auto";
+        chat.innerHTML = "";
+        renderWelcome();
+
+        controller = null;
+        generating = false;
+        stopButton.style.display = "none";
+        stopButton.textContent = "Stop";
+        stopButton.title = "Stop generation";
+
+        if (previousSession && LanguageModel) {
+            try {
+                session = await createSession();
+                setStatus("Model ready (" + activeConfig.label + ")", "ok");
+            } catch (error) {
+                console.error("New chat error:", error);
+                session = null;
+                setStatus("New chat error", "err");
+            }
+        }
+
+        if (LanguageModel) {
+            checkModelButton.disabled = Boolean(session);
+            downloadModelButton.disabled = Boolean(session);
+        }
+
+        resetting = false;
+        newChatButton.disabled = false;
+        updateSendButton();
+        updateQueueUI();
+        promptInput.focus();
+    }
+
+    function openNewChatDialog() {
+        if (resetting || importing) return;
+        newChatDialog.showModal();
     }
 
     /* ---------- Export / Import conversation ---------- */
@@ -860,9 +951,10 @@
     }
 
     async function importConversation(file) {
-        if (generating || pendingQueue.length || importing) return;
+        if (generating || pendingQueue.length || importing || resetting) return;
         importing = true;
         importBtn.disabled = true;
+        newChatButton.disabled = true;
 
         let staged = null;
         let committed = false;
@@ -925,6 +1017,7 @@
             }
             importing = false;
             importBtn.disabled = false;
+            newChatButton.disabled = false;
         }
     }
 
@@ -1034,6 +1127,10 @@
     sendButton.addEventListener("click", sendMessage);
     stopButton.addEventListener("click", stopGeneration);
     clearQueueBtn.addEventListener("click", clearQueue);
+    newChatButton.addEventListener("click", openNewChatDialog);
+    newChatDialog.addEventListener("close", () => {
+        if (newChatDialog.returnValue === "confirm") resetConversation();
+    });
     checkModelButton.addEventListener("click", checkModel);
     downloadModelButton.addEventListener("click", downloadModel);
     exportBtn.addEventListener("click", exportConversation);

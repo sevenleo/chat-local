@@ -1,6 +1,6 @@
 # Chrome Local AI Chat
 
-**v1.12.0**
+**v1.13.0**
 
 A small, local-first chat interface for testing the browser's built-in **Prompt API** with Gemini Nano. The browser runs the model on-device; this project provides the UI, media handling, conversation queue, import/export, and optional local system metrics.
 
@@ -29,7 +29,8 @@ No external AI service or API key is required.
 - Progressive capability detection: `text + image + audio`, then `text + image`, then `text only`.
 - Chrome and compatible Edge/Chromium builds, with automatic namespace and capability fallback.
 - Streaming responses with support for both incremental and accumulated chunks.
-- Discreet copy buttons for every textual user and assistant message.
+- Discreet copy buttons for every textual user and assistant message; assistant
+  copies preserve the original Markdown, including links, images, code and lists.
 - Assistant responses render common Markdown: headings, emphasis, lists, links, code, quotes, tables, underline, and ANSI colors.
 - Stop generation while a response is streaming.
 - Message queue: keep sending while the model is busy, skip the current response, cancel individual queued messages, or clear the whole queue.
@@ -129,7 +130,7 @@ The static files can be served by another local HTTP server. The chat still work
 5. Add media with **🖼️** or **🎵**, paste a screenshot with `Ctrl+V`, or drag image/audio files anywhere onto the page.
 6. Enable **OCR** for image text extraction, **Transcribe** for audio transcription, or both when both media types are attached.
 7. Send the message. The assistant response streams into the chat.
-8. Use the copy button beside any textual message to copy its visible text to the clipboard.
+8. Use the copy button beside any textual message to copy its original text or Markdown to the clipboard, including URLs and formatting markers.
 
 ### Queue controls
 
@@ -149,6 +150,9 @@ The composer remains usable while the model is generating:
 - **Download model:** creates a session with a download-progress monitor.
 - **Export:** downloads the current transcript as `chat-local-YYYY-MM-DD-HHmm.json`.
 - **Import:** loads a compatible JSON conversation and tries to restore its context.
+- **New chat:** opens a confirmation dialog, then clears the conversation, queued messages,
+  unsent draft and attachments before creating a fresh model session. If a response is
+  generating, it is stopped first.
 - **Show performance metrics:** toggles the footer and pauses or resumes every browser probe and `/stats` request.
 
 ## How it works

@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/) and versioning follows [SemVer](https://semver.org/).
 
+## [1.13.0] - 2026-09-05
+
+### Added
+- **New chat** button with confirmation dialog that clears the conversation, queue,
+  draft and attachments, then creates a fresh Prompt API session.
+
+### Changed
+- Copy buttons now write the original user text or assistant Markdown to the
+  clipboard, preserving links, images, formatting markers, code and lists.
+
 ## [1.12.0] - 2026-09-05
 
 ### Added
