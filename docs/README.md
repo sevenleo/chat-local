@@ -1,6 +1,6 @@
 # Chrome Local AI Chat
 
-**v1.13.1**
+**v1.15.0**
 
 A small, local-first chat interface for testing the browser's built-in **Prompt API** with Gemini Nano. The browser runs the model on-device; this project provides the UI, media handling, conversation queue, import/export, and optional local system metrics.
 
@@ -38,7 +38,7 @@ No external AI service or API key is required.
 - OCR mode for image-only text extraction.
 - Transcribe mode for audio-only speech transcription.
 - Mixed OCR + transcription mode when both media types are attached.
-- Retractable menu with model checks, model download, import, export, and performance-metric controls.
+- Retractable menu with model checks, model download, import, export, Chrome on-device internals shortcut, and performance-metric controls.
 - Self-contained JSON conversation export with media embedded as base64.
 - Conversation import that attempts to restore the model context through `initialPrompts`.
 - Responsive dark interface with keyboard focus states, sticky streaming scroll, attachment previews, and a matching favicon.
@@ -150,9 +150,13 @@ The composer remains usable while the model is generating:
 - **Download model:** creates a session with a download-progress monitor.
 - **Export:** downloads the current transcript as `chat-local-YYYY-MM-DD-HHmm.json`.
 - **Import:** loads a compatible JSON conversation and tries to restore its context.
+- **On-device internals:** shows Chrome's `chrome://on-device-internals/` diagnostics URL and copies it for pasting into the address bar; web pages cannot navigate directly to privileged `chrome://` pages.
 - **New chat:** opens a confirmation dialog, then clears the conversation, queued messages,
   unsent draft and attachments before creating a fresh model session. If a response is
   generating, it is stopped first.
+- **Finish chat:** opens a confirmation dialog, stops generation, destroys the active model
+  session, clears the chat and best-effort site storage cleanup, then attempts to close the tab.
+  The browser-controlled Gemini Nano model cache cannot be deleted by page JavaScript.
 - **Show performance metrics:** toggles the footer and pauses or resumes every browser probe and `/stats` request.
 
 ## How it works

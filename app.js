@@ -24,6 +24,8 @@
     let generating = false;
     let importing = false;
     let resetting = false;
+    let finishing = false;
+    let finalized = false;
     let activeGeneration = null;
     let attachedFiles = [];  // { id, type: "image"|"audio", blob, name, url }
     const pendingQueue = []; // { id, text, mode, ocr, trans, files, entry, bubbleEl }
@@ -45,8 +47,14 @@
     const statusEl            = document.getElementById("status");
     const newChatButton       = document.getElementById("newChatButton");
     const newChatDialog       = document.getElementById("newChatDialog");
+    const finishChatButton    = document.getElementById("finishChatButton");
+    const finishChatDialog    = document.getElementById("finishChatDialog");
     const checkModelButton    = document.getElementById("checkModel");
     const downloadModelButton = document.getElementById("downloadModel");
+    const onDeviceInternalsButton = document.getElementById("onDeviceInternalsButton");
+    const onDeviceInternalsDialog = document.getElementById("onDeviceInternalsDialog");
+    const onDeviceInternalsUrl = document.getElementById("onDeviceInternalsUrl");
+    const copyOnDeviceInternalsButton = document.getElementById("copyOnDeviceInternalsButton");
     const menuToggle          = document.getElementById("menuToggle");
     const menuClose           = document.getElementById("menuClose");
     const sideMenu            = document.getElementById("sideMenu");
@@ -82,6 +90,18 @@
 
         if (open) menuClose.focus();
         else if (restoreFocus) menuToggle.focus();
+    }
+
+    async function copyOnDeviceInternalsUrl() {
+        try {
+            await navigator.clipboard.writeText(onDeviceInternalsUrl.value);
+            copyOnDeviceInternalsButton.textContent = "Copied";
+            setStatus("URL copied — paste it in the address bar", "ok");
+        } catch (error) {
+            console.error("On-device internals URL copy error:", error);
+            onDeviceInternalsUrl.select();
+            setStatus("Copy failed — select the URL and copy it manually", "err");
+        }
     }
 
     function autoGrowTextarea() {
@@ -214,6 +234,10 @@
         const hasFiles = attachedFiles.length > 0;
         sendButton.disabled = !(hasText || hasFiles) || !session || resetting;
         sendButton.textContent = generating ? "Queue" : "Send";
+    }
+
+    function updateFinishButton() {
+        finishChatButton.disabled = finalized || finishing || importing || resetting;
     }
 
     function mediaUnavailable() {
@@ -496,16 +520,24 @@
     }
 
     async function checkModel() {
-        if (generating || pendingQueue.length || importing || resetting) return;
+        if (finalized || generating || pendingQueue.length || importing || resetting) return;
         checkModelButton.disabled = true;
         try {
             setStatus("Checking model…", "idle");
 
             const availability = await LanguageModel.availability(sessionOptions(activeConfig || MODEL_CONFIGS[MODEL_CONFIGS.length - 1]));
+            if (finalized) return;
 
             switch (availability) {
                 case "available":
-                    if (!session) session = await createSession();
+                    if (!session) {
+                        const newSession = await createSession();
+                        if (finalized) {
+                            await destroySession(newSession);
+                            return;
+                        }
+                        session = newSession;
+                    }
                     setStatus("Model ready (" + activeConfig.label + ")", "ok");
                     updateSendButton();
                     downloadModelButton.disabled = true;
@@ -539,20 +571,20 @@
             console.error(error);
             setStatus("Error checking model", "err");
         } finally {
-            checkModelButton.disabled = Boolean(session);
+            checkModelButton.disabled = finalized || Boolean(session);
         }
     }
 
     /* ---------- Download model ---------- */
     async function downloadModel() {
-        if (session || generating || pendingQueue.length || importing || resetting) return;
+        if (finalized || session || generating || pendingQueue.length || importing || resetting) return;
         try {
             downloadModelButton.disabled = true;
             checkModelButton.disabled = true;
 
             setStatus("Starting download…", "warn");
 
-            session = await createSession({
+            const newSession = await createSession({
                 monitor(monitor) {
                     monitor.addEventListener("downloadprogress", event => {
                         const percent = Math.round(event.loaded * 100 / event.total);
@@ -561,15 +593,87 @@
                 }
             });
 
+            if (finalized) {
+                await destroySession(newSession);
+                return;
+            }
+            session = newSession;
+
             setStatus("Model ready (" + activeConfig.label + ")", "ok");
             updateSendButton();
             console.log("Model downloaded:", session);
         } catch (error) {
             console.error(error);
-            setStatus("Download error — device cannot run the model", "err");
+            if (!finalized) setStatus("Download error — device cannot run the model", "err");
         } finally {
-            downloadModelButton.disabled = Boolean(session);
-            checkModelButton.disabled = Boolean(session);
+            downloadModelButton.disabled = finalized || Boolean(session);
+            checkModelButton.disabled = finalized || Boolean(session);
+        }
+    }
+
+    async function destroySession(previousSession) {
+        if (!previousSession) return;
+        try {
+            await previousSession.destroy();
+        } catch (error) {
+            console.error("Session destroy error:", error);
+        }
+    }
+
+    async function clearSiteData() {
+        try {
+            localStorage.clear();
+        } catch (error) {
+            console.warn("localStorage cleanup error:", error);
+        }
+
+        try {
+            sessionStorage.clear();
+        } catch (error) {
+            console.warn("sessionStorage cleanup error:", error);
+        }
+
+        try {
+            const cookies = document.cookie ? document.cookie.split(";") : [];
+            for (const cookie of cookies) {
+                const name = cookie.split("=", 1)[0].trim();
+                if (name) document.cookie = name + "=; Max-Age=0; path=/";
+            }
+        } catch (error) {
+            console.warn("Cookie cleanup error:", error);
+        }
+
+        try {
+            if (window.caches) {
+                const cacheNames = await window.caches.keys();
+                await Promise.all(cacheNames.map(name => window.caches.delete(name)));
+            }
+        } catch (error) {
+            console.warn("Cache cleanup error:", error);
+        }
+
+        try {
+            if (navigator.serviceWorker) {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(registrations.map(registration => registration.unregister()));
+            }
+        } catch (error) {
+            console.warn("Service worker cleanup error:", error);
+        }
+
+        try {
+            if (window.indexedDB && typeof window.indexedDB.databases === "function") {
+                const databases = await window.indexedDB.databases();
+                await Promise.all(databases
+                    .map(database => database.name)
+                    .filter(Boolean)
+                    .map(name => new Promise(resolve => {
+                        const request = window.indexedDB.deleteDatabase(name);
+                        request.onsuccess = request.onerror = request.onblocked = resolve;
+                    })));
+            }
+        } catch (error) {
+            console.warn("IndexedDB cleanup error:", error);
         }
     }
 
@@ -774,6 +878,7 @@
 
         resetting = true;
         newChatButton.disabled = true;
+        updateFinishButton();
         updateSendButton();
 
         const previousSession = session;
@@ -781,12 +886,8 @@
 
         if (controller) controller.abort();
         if (previousSession) {
-            try {
-                previousSession.destroy();
-            } catch (error) {
-                console.error("Session destroy error:", error);
-            }
             session = null;
+            await destroySession(previousSession);
         }
 
         clearQueue();
@@ -830,6 +931,7 @@
 
         resetting = false;
         newChatButton.disabled = false;
+        updateFinishButton();
         updateSendButton();
         updateQueueUI();
         promptInput.focus();
@@ -838,6 +940,79 @@
     function openNewChatDialog() {
         if (resetting || importing) return;
         newChatDialog.showModal();
+    }
+
+    function openFinishChatDialog() {
+        if (finalized || finishing || resetting || importing) return;
+        finishChatDialog.showModal();
+    }
+
+    async function finishChat() {
+        if (finalized || finishing || resetting || importing) return;
+
+        finishing = true;
+        finalized = true;
+        updateFinishButton();
+        setStatus("Finalizing chat…", "idle");
+
+        try {
+            const pendingGeneration = activeGeneration;
+            const previousSession = session;
+
+            if (controller) controller.abort();
+            clearQueue();
+            session = null;
+            await destroySession(previousSession);
+
+            const statsToggle = document.getElementById("statsToggle");
+            if (statsToggle && statsToggle.checked) {
+                statsToggle.checked = false;
+                statsToggle.dispatchEvent(new Event("change"));
+            }
+
+            if (pendingGeneration) {
+                try {
+                    await pendingGeneration;
+                } catch (error) {
+                    console.error("Generation cleanup error:", error);
+                }
+            }
+
+            releaseMedia(transcript);
+            clearAttachments();
+            transcript.length = 0;
+            promptInput.value = "";
+            promptInput.style.height = "auto";
+            chat.innerHTML = "";
+            renderWelcome();
+
+            controller = null;
+            activeGeneration = null;
+            generating = false;
+            stopButton.style.display = "none";
+            stopButton.textContent = "Stop";
+            stopButton.title = "Stop generation";
+            activeConfig = null;
+            applyConfigToUI();
+            newChatButton.disabled = true;
+            checkModelButton.disabled = true;
+            downloadModelButton.disabled = true;
+            importBtn.disabled = true;
+
+            await clearSiteData();
+            setStatus("Chat finalized — close this tab manually if it remains open.", "idle");
+        } catch (error) {
+            console.error("Chat finalization error:", error);
+            setStatus("Chat finalization error — close this tab manually.", "err");
+        } finally {
+            finishing = false;
+            updateFinishButton();
+            try {
+                window.close();
+            } catch (error) {
+                console.warn("Tab close was blocked:", error);
+            }
+        }
     }
 
     /* ---------- Export / Import conversation ---------- */
@@ -955,6 +1130,7 @@
         importing = true;
         importBtn.disabled = true;
         newChatButton.disabled = true;
+        updateFinishButton();
 
         let staged = null;
         let committed = false;
@@ -1018,6 +1194,7 @@
             importing = false;
             importBtn.disabled = false;
             newChatButton.disabled = false;
+            updateFinishButton();
         }
     }
 
@@ -1131,8 +1308,24 @@
     newChatDialog.addEventListener("close", () => {
         if (newChatDialog.returnValue === "confirm") resetConversation();
     });
+    finishChatButton.addEventListener("click", () => {
+        setMenuOpen(false, false);
+        openFinishChatDialog();
+    });
+    finishChatDialog.addEventListener("close", () => {
+        if (finishChatDialog.returnValue === "confirm") finishChat();
+    });
     checkModelButton.addEventListener("click", checkModel);
     downloadModelButton.addEventListener("click", downloadModel);
+    onDeviceInternalsButton.addEventListener("click", () => {
+        setMenuOpen(false, false);
+        onDeviceInternalsDialog.showModal();
+        onDeviceInternalsUrl.select();
+    });
+    copyOnDeviceInternalsButton.addEventListener("click", copyOnDeviceInternalsUrl);
+    onDeviceInternalsDialog.addEventListener("close", () => {
+        copyOnDeviceInternalsButton.textContent = "Copy URL";
+    });
     exportBtn.addEventListener("click", exportConversation);
     importBtn.addEventListener("click", () => importInput.click());
     [checkModelButton, downloadModelButton, exportBtn, importBtn].forEach(button => {
@@ -1173,6 +1366,7 @@
 
         // pick the richest input config this browser/model actually accepts
         activeConfig = await pickConfig();
+        if (finalized) return;
         applyConfigToUI();
         checkModel();
     }

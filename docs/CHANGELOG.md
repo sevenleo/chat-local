@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/) and versioning follows [SemVer](https://semver.org/).
 
+## [1.15.0] - 2026-09-05
+
+### Added
+- **On-device internals** shortcut that shows and copies Chrome's
+  `chrome://on-device-internals/` URL for opening from the address bar.
+
+## [1.14.0] - 2026-09-05
+
+### Added
+- **Finish chat** action in the menu that stops generation, destroys the active
+  Prompt API session, clears chat/site data, and attempts to close the tab.
+- Documentation of the browser-controlled Gemini Nano cache limitation.
+
 ## [1.13.1] - 2026-09-05
 
 ### Fixed

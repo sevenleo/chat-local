@@ -261,6 +261,7 @@ body.menu-open .side-menu {
 .menu-action:active:not(:disabled) { transform: translateY(1px); }
 .menu-action:disabled { cursor: not-allowed; }
 .menu-action__icon { color: var(--accent); font-size: 17px; }
+.menu-action--danger .menu-action__icon { color: #e57368; }
 .menu-divider { height: 1px; margin: 24px 0 18px; background: var(--border-soft); }
 
 .settings-toggle {
@@ -359,6 +360,17 @@ body.menu-open .side-menu {
     color: var(--text-dim);
     font-size: 14px;
     line-height: 1.5;
+}
+.new-chat-dialog__url {
+    width: 100%;
+    margin-top: 16px;
+    padding: 10px 12px;
+    color: var(--text);
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: var(--mono);
+    font-size: 12px;
 }
 .new-chat-dialog__actions {
     display: flex;

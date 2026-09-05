@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Local AI Chat</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="style.css?v=1.13.1">
+    <link rel="stylesheet" href="style.css?v=1.15.0">
 </head>
 <body>
 
@@ -104,6 +104,16 @@
                 <span class="menu-action__label">Import</span>
                 <span class="menu-action__icon" aria-hidden="true">＋</span>
             </button>
+            <button id="onDeviceInternalsButton" class="menu-action" type="button"
+                    title="Copy chrome://on-device-internals/ to the clipboard">
+                <span class="menu-action__label">On-device internals</span>
+                <span class="menu-action__icon" aria-hidden="true">↗</span>
+            </button>
+            <button id="finishChatButton" class="menu-action menu-action--danger" type="button"
+                    title="Stop the model and finish this chat">
+                <span class="menu-action__label">Finish chat</span>
+                <span class="menu-action__icon" aria-hidden="true">⏹</span>
+            </button>
         </div>
 
         <div class="menu-divider"></div>
@@ -134,9 +144,46 @@
         </form>
     </dialog>
 
-    <script defer src="chat-logic.js?v=1.13.1"></script>
-    <script defer src="app.js?v=1.13.1"></script>
-    <script defer src="sysstats.js?v=1.13.1"></script>
+    <dialog id="finishChatDialog" class="new-chat-dialog" aria-labelledby="finishChatTitle"
+            aria-describedby="finishChatDescription">
+        <form method="dialog" class="new-chat-dialog__panel">
+            <p class="eyebrow">End session</p>
+            <h2 id="finishChatTitle">Finish this chat?</h2>
+            <p id="finishChatDescription">
+                This stops generation, destroys the model session, clears this chat and the site's stored data, then tries to close the tab. The browser's built-in model cache may remain.
+            </p>
+            <div class="new-chat-dialog__actions">
+                <button class="new-chat-dialog__button new-chat-dialog__button--cancel"
+                        value="cancel" type="submit">Cancel</button>
+                <button class="new-chat-dialog__button new-chat-dialog__button--confirm"
+                        value="confirm" type="submit">Finish chat</button>
+            </div>
+        </form>
+    </dialog>
+
+    <dialog id="onDeviceInternalsDialog" class="new-chat-dialog"
+            aria-labelledby="onDeviceInternalsTitle" aria-describedby="onDeviceInternalsDescription">
+        <form method="dialog" class="new-chat-dialog__panel">
+            <p class="eyebrow">Chrome diagnostics</p>
+            <h2 id="onDeviceInternalsTitle">Open on-device internals</h2>
+            <p id="onDeviceInternalsDescription">
+                Chrome blocks web pages from opening privileged <code>chrome://</code> pages. Copy this URL and paste it into the address bar.
+            </p>
+            <input id="onDeviceInternalsUrl" class="new-chat-dialog__url" type="text"
+                   value="chrome://on-device-internals/" readonly aria-label="On-device internals URL">
+            <div class="new-chat-dialog__actions">
+                <button class="new-chat-dialog__button new-chat-dialog__button--cancel"
+                        value="cancel" type="submit">Close</button>
+                <button id="copyOnDeviceInternalsButton"
+                        class="new-chat-dialog__button new-chat-dialog__button--confirm"
+                        type="button">Copy URL</button>
+            </div>
+        </form>
+    </dialog>
+
+    <script defer src="chat-logic.js?v=1.15.0"></script>
+    <script defer src="app.js?v=1.15.0"></script>
+    <script defer src="sysstats.js?v=1.15.0"></script>
 
 </body>
 </html>
