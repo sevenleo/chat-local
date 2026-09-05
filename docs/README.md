@@ -1,6 +1,6 @@
 # Chrome Local AI Chat
 
-**v1.13.0**
+**v1.13.1**
 
 A small, local-first chat interface for testing the browser's built-in **Prompt API** with Gemini Nano. The browser runs the model on-device; this project provides the UI, media handling, conversation queue, import/export, and optional local system metrics.
 

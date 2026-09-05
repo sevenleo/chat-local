@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/) and versioning follows [SemVer](https://semver.org/).
 
+## [1.13.1] - 2026-09-05
+
+### Fixed
+- Bumped frontend asset versions so browsers load the Markdown-preserving
+  clipboard implementation instead of a cached text-only copy handler.
+
 ## [1.13.0] - 2026-09-05
 
 ### Added
