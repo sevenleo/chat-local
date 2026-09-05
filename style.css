@@ -437,6 +437,18 @@ textarea::placeholder { color: var(--text-faint); }
 }
 #stop:hover { filter: brightness(1.1); }
 
+#clearQueue {
+    padding: 9px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-dim);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
+}
+#clearQueue:hover { color: var(--danger); border-color: var(--danger); }
+
 /* ---------- System stats bar ---------- */
 .sys-stats {
     display: flex;
@@ -498,6 +510,37 @@ textarea::placeholder { color: var(--text-faint); }
     border-radius: 999px;
 }
 .msg-text { white-space: pre-wrap; word-break: break-word; }
+
+/* ---------- Queued messages ---------- */
+.message.user.queued { opacity: 0.7; }
+
+.queue-tag {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    align-self: flex-start;
+}
+.queue-badge {
+    padding: 3px 9px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--warn);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+}
+.queue-cancel {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    font-size: 11px;
+    line-height: 1;
+    color: var(--text-faint);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+}
+.queue-cancel:hover { color: #fff; background: var(--danger); border-color: var(--danger); }
 
 /* ---------- Drag & drop overlay ---------- */
 body::after {

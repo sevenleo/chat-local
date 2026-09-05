@@ -19,6 +19,7 @@ No external AI API or API key is required.
 - **Transcribe mode**: audio attached → model returns only the speech transcription
 - Streaming responses with correct incremental/accumulated chunk handling
 - Stop/cancel generation mid-stream
+- **Message queue**: keep typing and sending while the model generates — messages are queued and processed in order; Stop becomes "Skip ⏭" to abort the current turn and start the next; cancel individual queued messages (✕ on the bubble) or all at once ("Clear queue")
 - Model availability check with colored status pill
 - Model download trigger with live progress percentage
 - Refined dark chat UI — vanilla HTML/CSS/JS, no framework
@@ -72,6 +73,12 @@ GPU/VRAM entirely — nothing breaks, nothing lies.
    - With audio attached, a **Transcribe** toggle appears — enable it for transcription only.
    - With neither toggled, media + your text are sent together as a normal question.
 5. **Stop** appears while the model is generating, to cancel mid-stream.
+   - You can keep typing and sending while the model works — extra messages are
+     **queued** (shown with a "⏳ queued" badge) and processed in order.
+   - With a queue pending, **Stop** becomes **Skip ⏭** — aborts the current
+     reply and immediately starts the next queued message.
+   - Cancel a queued message with the **✕** on its bubble, or all of them with
+     **Clear queue**.
 
 ## Project Structure
 

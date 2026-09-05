@@ -11,6 +11,7 @@
     let controller = null;
     let generating = false;
     let attachedFiles = [];  // { id, type: "image"|"audio", blob, name, url }
+    const pendingQueue = []; // { id, text, mode, ocr, trans, files, entry, bubbleEl }
 
     /*
     Source of truth for the conversation. Each entry:
@@ -25,6 +26,7 @@
     const promptInput         = document.getElementById("prompt");
     const sendButton          = document.getElementById("send");
     const stopButton          = document.getElementById("stop");
+    const clearQueueBtn       = document.getElementById("clearQueue");
     const statusEl            = document.getElementById("status");
     const checkModelButton    = document.getElementById("checkModel");
     const downloadModelButton = document.getElementById("downloadModel");
@@ -150,7 +152,20 @@
     function updateSendButton() {
         const hasText = promptInput.value.trim().length > 0;
         const hasFiles = attachedFiles.length > 0;
-        sendButton.disabled = !(hasText || hasFiles) || !session || generating;
+        sendButton.disabled = !(hasText || hasFiles) || !session;
+        sendButton.textContent = generating ? "Queue" : "Send";
+    }
+
+    /* Sync everything that reflects the queue: Clear-queue visibility,
+       Stop/Skip label, and the "(n queued)" counter in the status line. */
+    function updateQueueUI() {
+        clearQueueBtn.hidden = pendingQueue.length === 0;
+        if (generating) {
+            const hasQueue = pendingQueue.length > 0;
+            stopButton.textContent = hasQueue ? "Skip ⏭" : "Stop";
+            stopButton.title = hasQueue ? "Stop current and start next" : "Stop generation";
+            setStatus(hasQueue ? "Thinking… (" + pendingQueue.length + " queued)" : "Thinking…", "idle");
+        }
     }
 
     /* ---------- Create message bubble ---------- */
@@ -253,12 +268,12 @@
 
     /* ---------- Build multimodal prompt ---------- */
 
-    function buildPromptContent(userText) {
+    /*
+    ocr/trans are captured at enqueue time — the checkboxes are reset when the
+    message is sent, long before a queued item actually reaches the model.
+    */
+    function buildPromptContent(userText, files, ocr, trans) {
         const content = [];
-
-        // Build the text prompt
-        const ocr = ocrCheck.checked;
-        const trans = transCheck.checked;
 
         if (ocr && !trans) {
             // OCR-only mode — ignore user text for the instruction
@@ -275,7 +290,7 @@
         }
 
         // Attach files
-        for (const f of attachedFiles) {
+        for (const f of files) {
             content.push({ type: f.type, value: f.blob });
         }
 
@@ -466,35 +481,108 @@
         }
     }
 
+    /* ---------- Message queue ---------- */
+
+    function markQueued(item) {
+        item.bubbleEl.classList.add("queued");
+        const bubble = item.bubbleEl.querySelector(".content");
+        const row = document.createElement("div");
+        row.className = "queue-tag";
+
+        const badge = document.createElement("span");
+        badge.className = "queue-badge";
+        badge.textContent = "⏳ queued";
+        row.appendChild(badge);
+
+        const cancel = document.createElement("button");
+        cancel.className = "queue-cancel";
+        cancel.textContent = "✕";
+        cancel.title = "Cancel this queued message";
+        cancel.addEventListener("click", () => cancelQueued(item.id));
+        row.appendChild(cancel);
+
+        bubble.appendChild(row);
+    }
+
+    function cancelQueued(id) {
+        const idx = pendingQueue.findIndex(i => i.id === id);
+        if (idx === -1) return;
+        const [item] = pendingQueue.splice(idx, 1);
+        for (const f of item.files) URL.revokeObjectURL(f.url);
+        item.bubbleEl.remove();
+        updateQueueUI();
+    }
+
+    function clearQueue() {
+        while (pendingQueue.length) cancelQueued(pendingQueue[0].id);
+    }
+
     /* ---------- Send message ---------- */
-    async function sendMessage() {
+
+    /*
+    Capture input → render the user bubble immediately → enqueue. The
+    transcript and the model only see the item when runQueue() picks it,
+    so export order always matches what was actually asked.
+    */
+    function sendMessage() {
         const userText = promptInput.value.trim();
         const hasFiles = attachedFiles.length > 0;
         if (!userText && !hasFiles) return;
-        if (!session || generating) return;
+        if (!session) return;
 
-        generating = true;
         removeWelcome();
 
-        // One entry drives both the bubble and the transcript
-        const mode = ocrCheck.checked && transCheck.checked ? "both"
-                   : ocrCheck.checked ? "ocr"
-                   : transCheck.checked ? "transcribe"
-                   : null;
-        const entry = { role: "user", text: userText, mode, media: attachedFiles.slice() };
-        transcript.push(entry);
-        exportBtn.disabled = false;
+        // Capture everything now — checkboxes/inputs reset before a queued
+        // item ever reaches the model.
+        const ocr = ocrCheck.checked;
+        const trans = transCheck.checked;
+        const mode = ocr && trans ? "both" : ocr ? "ocr" : trans ? "transcribe" : null;
+        const files = attachedFiles.slice();
+        const entry = { role: "user", text: userText, mode, media: files };
 
-        // Render user message with media previews
-        createUserMessage(entry);
+        const item = {
+            id: crypto.randomUUID(),
+            text: userText, mode, ocr, trans, files, entry,
+            bubbleEl: createUserMessage(entry),
+        };
 
-        // Clear input
+        // Clear the composer for the next message right away
         promptInput.value = "";
         promptInput.style.height = "auto";
-        promptInput.disabled = true;
-        sendButton.disabled = true;
+        clearAttachments();
+        updateSendButton();
+
+        pendingQueue.push(item);
+        if (generating) {
+            markQueued(item);
+            updateQueueUI();
+        } else {
+            runQueue();
+        }
+    }
+
+    async function runQueue() {
+        if (generating) return;
+
+        while (pendingQueue.length) {
+            const item = pendingQueue.shift();
+            // No longer queued: drop badge/cancel, join the transcript
+            item.bubbleEl.classList.remove("queued");
+            const tag = item.bubbleEl.querySelector(".queue-tag");
+            if (tag) tag.remove();
+            transcript.push(item.entry);
+            exportBtn.disabled = false;
+            updateQueueUI();
+
+            await runGeneration(item);
+        }
+    }
+
+    async function runGeneration(item) {
+        generating = true;
         stopButton.style.display = "block";
-        setStatus("Thinking…", "idle");
+        updateSendButton();
+        updateQueueUI();   // sets "Thinking… (n queued)"
 
         const aiContent = createMessage("ai", "");
         const typingDots = showTyping(aiContent);
@@ -504,12 +592,10 @@
         try {
             // Build the multimodal prompt array; a text-only model gets a
             // plain string prompt (media can't be attached in that mode).
-            let promptArg = userText;
-            if (attachedFiles.length) {
-                promptArg = [{ role: "user", content: buildPromptContent(userText) }];
+            let promptArg = item.text;
+            if (item.files.length) {
+                promptArg = [{ role: "user", content: buildPromptContent(item.text, item.files, item.ocr, item.trans) }];
             }
-            // Clear attachments from UI now that they're in the prompt
-            clearAttachments();
 
             const stream = session.promptStreaming(
                 promptArg,
@@ -553,13 +639,13 @@
             transcript.push({ role: "ai", text: aiContent.textContent });
             exportBtn.disabled = false;
 
-            attachedFiles = [];    // already cleared above, but safety
             controller = null;
             generating = false;
-            promptInput.disabled = false;
-            updateSendButton();
             stopButton.style.display = "none";
-            promptInput.focus();
+            stopButton.textContent = "Stop";
+            updateSendButton();
+            // With a queue pending, runQueue() starts the next item right away
+            if (!pendingQueue.length) promptInput.focus();
         }
     }
 
@@ -637,7 +723,7 @@
     }
 
     async function importConversation(file) {
-        if (generating) return;
+        if (generating || pendingQueue.length) return;
 
         let obj;
         try {
@@ -806,6 +892,7 @@
     /* ---------- Events ---------- */
     sendButton.addEventListener("click", sendMessage);
     stopButton.addEventListener("click", stopGeneration);
+    clearQueueBtn.addEventListener("click", clearQueue);
     checkModelButton.addEventListener("click", checkModel);
     downloadModelButton.addEventListener("click", downloadModel);
     exportBtn.addEventListener("click", exportConversation);

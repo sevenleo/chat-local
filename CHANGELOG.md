@@ -3,6 +3,25 @@
 All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/) and versioning follows [SemVer](https://semver.org/).
 
+## [1.8.0] - 2026-09-05
+
+### Added
+- **Message queue**: the composer never locks during generation. Sending while
+  the model is streaming enqueues the message (bubble shown with a "⏳ queued"
+  badge) and it is processed automatically as soon as the current turn ends.
+- **Skip**: while a queue exists, the Stop button becomes "Skip ⏭" — aborts
+  the current generation and immediately starts the next queued message.
+- **Cancel queued message**: each queued bubble gets a ✕ button to remove it
+  before it reaches the model (it never enters the transcript/export).
+- **Clear queue**: a "Clear queue" button (visible only when the queue is
+  non-empty) cancels all pending messages at once.
+
+### Changed
+- `sendMessage()` was split into enqueue (`sendMessage`), driver (`runQueue`)
+  and executor (`runGeneration`). OCR/Transcribe flags are captured at enqueue
+  time, and items only enter the transcript when they actually start
+  generating — export order always matches what the model saw.
+
 ## [1.7.2] - 2026-09-04
 
 ### Changed
