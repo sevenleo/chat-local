@@ -1,6 +1,6 @@
 # Chrome Local AI Chat
 
-**v1.7.2**
+**v1.9.1**
 
 A simple experimental project for testing the **Built-in AI / Prompt API** (Gemini Nano) with a locally executed language model.
 
@@ -45,7 +45,9 @@ No external AI API or API key is required.
 The app automatically probes the Prompt API namespace (`LanguageModel`,
 `window.ai.languageModel`) and the richest input configuration your browser
 actually supports — media buttons hide when unsupported, and the chat keeps
-working regardless of the browser's capability level.
+working regardless of the browser's capability level. Media received by paste
+or drag-and-drop is also rejected before sending when the active session is
+text-only.
 
 ## How to run
 
@@ -85,11 +87,12 @@ metrics.
 
 ```text
 chat-local/
-├── chat.html      ← markup only (loads style.css + app.js + sysstats.js)
+├── chat.html      ← markup only (loads style.css + chat-logic.js + app.js + sysstats.js)
 ├── style.css      ← design system: refined dark theme, no framework
-├── app.js         ← chat logic: multimodal prompts, streaming, stop
+├── app.js         ← chat UI: multimodal prompts, streaming, queue, import/export
+├── chat-logic.js  ← shared pure logic used by app.js and test.js
 ├── sysstats.js    ← footer stats: browser metrics + optional /stats polling
-├── test.js        ← streaming chunk-fold + export round-trip test (node test.js)
+├── test.js        ← shared logic tests (node test.js)
 ├── server.py      ← static file server + /stats system-stats endpoint (port 8000)
 ├── CHANGELOG.md   ← version history
 └── README.md
@@ -97,9 +100,10 @@ chat-local/
 
 ## Development notes
 
-- All logic lives in a single IIFE in `app.js` — no modules, no build step, no dependencies.
+- UI state lives in an IIFE in `app.js`; pure streaming, prompt, capability and queue
+  helpers are shared through `chat-logic.js` — no build step or external dependencies.
 - The streaming handler supports both **incremental** and **accumulated** chunk formats
-  emitted by `promptStreaming()`; `test.js` guards this with one runnable assert per mode.
+  emitted by `promptStreaming()`; `test.js` exercises the same helpers used by the app.
 - Multimodal input follows the Prompt API message format:
   `[{ role: "user", content: [{ type: "text"|"image"|"audio", value }] }]`
 - OCR / Transcribe modes work by replacing the user's instruction with a strict

@@ -129,7 +129,8 @@ def main():
     args = parser.parse_args()
 
     handler = partial(Handler, directory=".")
-    httpd = ThreadingHTTPServer(("0.0.0.0", args.port), handler)
+    # Keep the local chat and exported conversations off the LAN by default.
+    httpd = ThreadingHTTPServer(("127.0.0.1", args.port), handler)
     httpd.daemon_threads = True
 
     print(f"Serving at http://localhost:{args.port}/chat.html")

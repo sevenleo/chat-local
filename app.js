@@ -6,10 +6,22 @@
 (function () {
     "use strict";
 
+    const {
+        foldChunk,
+        buildPromptContent,
+        supportsMedia,
+        isValidConversation,
+        dequeue,
+        removeQueuedItem,
+        drainQueue,
+        buildImportedPrompt,
+    } = window.ChatLocalLogic;
+
     /* ---------- State ---------- */
     let session = null;
     let controller = null;
     let generating = false;
+    let importing = false;
     let attachedFiles = [];  // { id, type: "image"|"audio", blob, name, url }
     const pendingQueue = []; // { id, text, mode, ocr, trans, files, entry, bubbleEl }
 
@@ -100,15 +112,31 @@
 
             if (f.type === "image") {
                 hasImage = true;
-                chip.innerHTML = `<img src="${f.url}" alt="">`;
+                const image = document.createElement("img");
+                image.src = f.url;
+                image.alt = f.name;
+                chip.appendChild(image);
             } else {
                 hasAudio = true;
-                chip.innerHTML = `<span class="attach-icon">🎵</span>`;
+                const icon = document.createElement("span");
+                icon.className = "attach-icon";
+                icon.textContent = "🎵";
+                chip.appendChild(icon);
             }
 
-            chip.innerHTML += `<span class="attach-name">${f.name}</span>`;
-            chip.innerHTML += `<button class="attach-remove" data-id="${f.id}">&times;</button>`;
-            chip.querySelector(".attach-remove").addEventListener("click", () => removeFile(f.id));
+            const name = document.createElement("span");
+            name.className = "attach-name";
+            name.textContent = f.name;
+            chip.appendChild(name);
+
+            const remove = document.createElement("button");
+            remove.className = "attach-remove";
+            remove.type = "button";
+            remove.textContent = "×";
+            remove.title = "Remove attachment";
+            remove.setAttribute("aria-label", "Remove attachment " + f.name);
+            remove.addEventListener("click", () => removeFile(f.id));
+            chip.appendChild(remove);
 
             attachmentsEl.appendChild(chip);
         }
@@ -127,12 +155,25 @@
         updateSendButton();
     }
 
-    function clearAttachments() {
-        for (const f of attachedFiles) URL.revokeObjectURL(f.url);
+    function clearAttachments(revokeUrls = true) {
+        if (revokeUrls) {
+            for (const f of attachedFiles) URL.revokeObjectURL(f.url);
+        }
         attachedFiles = [];
         ocrCheck.checked = false;
         transCheck.checked = false;
         renderAttachments();
+    }
+
+    function releaseMedia(entries) {
+        const urls = new Set();
+        for (const entry of entries) {
+            if (entry.role !== "user") continue;
+            for (const media of entry.media || []) {
+                if (media.url) urls.add(media.url);
+            }
+        }
+        for (const url of urls) URL.revokeObjectURL(url);
     }
 
     function addFiles(fileList, type) {
@@ -154,6 +195,10 @@
         const hasFiles = attachedFiles.length > 0;
         sendButton.disabled = !(hasText || hasFiles) || !session;
         sendButton.textContent = generating ? "Queue" : "Send";
+    }
+
+    function mediaUnavailable() {
+        setStatus("Media unavailable in text-only mode", "warn");
     }
 
     /* Sync everything that reflects the queue: Clear-queue visibility,
@@ -256,37 +301,6 @@
         if (nearBottom) chat.scrollTop = chat.scrollHeight;
     }
 
-    /* ---------- Build multimodal prompt ---------- */
-
-    /*
-    ocr/trans are captured at enqueue time — the checkboxes are reset when the
-    message is sent, long before a queued item actually reaches the model.
-    */
-    function buildPromptContent(userText, files, ocr, trans) {
-        const content = [];
-
-        if (ocr && !trans) {
-            // OCR-only mode — ignore user text for the instruction
-            content.push({ type: "text", value: "Extract all text from this image. Return only the text content, nothing else." });
-        } else if (trans && !ocr) {
-            // Transcribe-only mode
-            content.push({ type: "text", value: "Transcribe all speech from this audio. Return only the transcription, nothing else." });
-        } else if (ocr && trans) {
-            // Both — ask for both
-            content.push({ type: "text", value: "Extract all text from this image AND transcribe all speech from this audio. Return both." });
-        } else {
-            // Normal mode — use user's text, or a default prompt if only media
-            content.push({ type: "text", value: userText || "Describe what is in this media." });
-        }
-
-        // Attach files
-        for (const f of files) {
-            content.push({ type: f.type, value: f.blob });
-        }
-
-        return content;
-    }
-
     /* ---------- Model namespace resolution (Chrome / Edge / other Chromium) ---------- */
 
     /*
@@ -369,6 +383,8 @@
            create() failure just means "try the next, smaller one". */
         const attempts = [];
 
+        const previousConfig = activeConfig;
+
         for (const config of MODEL_CONFIGS) {
             try {
                 const session = await LanguageModel.create(sessionOptions(config, extra));
@@ -380,6 +396,8 @@
             }
         }
         /* all configs failed — only now is it worth the noise */
+        activeConfig = previousConfig;
+        applyConfigToUI();
         console.error("create() failed for all configs —\n  " + attempts.join("\n  "));
         throw new Error("No session config could be created");
     }
@@ -399,6 +417,8 @@
     }
 
     async function checkModel() {
+        if (generating || pendingQueue.length || importing) return;
+        checkModelButton.disabled = true;
         try {
             setStatus("Checking model…", "idle");
 
@@ -406,7 +426,7 @@
 
             switch (availability) {
                 case "available":
-                    session = await createSession();
+                    if (!session) session = await createSession();
                     setStatus("Model ready (" + activeConfig.label + ")", "ok");
                     updateSendButton();
                     downloadModelButton.disabled = true;
@@ -415,18 +435,18 @@
                 case "downloadable":
                     setStatus("Model not installed", "warn");
                     downloadModelButton.disabled = false;
-                    sendButton.disabled = true;
+                    updateSendButton();
                     break;
 
                 case "downloading":
                     setStatus("Download is in progress", "warn");
                     downloadModelButton.disabled = true;
-                    sendButton.disabled = true;
+                    updateSendButton();
                     break;
 
                 case "unavailable":
                     setStatus("Model unavailable in this browser", "err");
-                    sendButton.disabled = true;
+                    updateSendButton();
                     console.warn(
                         "availability() = unavailable. Edge: needs edge://flags/#prompt-api-for-extensions " +
                         "(Canary/Dev) or Copilot+ hardware; Chrome: chrome://flags/#prompt-api-for-gemini-nano."
@@ -439,11 +459,14 @@
         } catch (error) {
             console.error(error);
             setStatus("Error checking model", "err");
+        } finally {
+            checkModelButton.disabled = false;
         }
     }
 
     /* ---------- Download model ---------- */
     async function downloadModel() {
+        if (session || generating || pendingQueue.length || importing) return;
         try {
             downloadModelButton.disabled = true;
             checkModelButton.disabled = true;
@@ -466,7 +489,7 @@
             console.error(error);
             setStatus("Download error — device cannot run the model", "err");
         } finally {
-            downloadModelButton.disabled = false;
+            downloadModelButton.disabled = Boolean(session);
             checkModelButton.disabled = false;
         }
     }
@@ -488,6 +511,7 @@
         cancel.className = "queue-cancel";
         cancel.textContent = "✕";
         cancel.title = "Cancel this queued message";
+        cancel.setAttribute("aria-label", "Cancel this queued message");
         cancel.addEventListener("click", () => cancelQueued(item.id));
         row.appendChild(cancel);
 
@@ -495,16 +519,19 @@
     }
 
     function cancelQueued(id) {
-        const idx = pendingQueue.findIndex(i => i.id === id);
-        if (idx === -1) return;
-        const [item] = pendingQueue.splice(idx, 1);
+        const item = removeQueuedItem(pendingQueue, id);
+        if (!item) return;
         for (const f of item.files) URL.revokeObjectURL(f.url);
         item.bubbleEl.remove();
         updateQueueUI();
     }
 
     function clearQueue() {
-        while (pendingQueue.length) cancelQueued(pendingQueue[0].id);
+        for (const item of drainQueue(pendingQueue)) {
+            for (const f of item.files) URL.revokeObjectURL(f.url);
+            item.bubbleEl.remove();
+        }
+        updateQueueUI();
     }
 
     /* ---------- Send message ---------- */
@@ -519,6 +546,10 @@
         const hasFiles = attachedFiles.length > 0;
         if (!userText && !hasFiles) return;
         if (!session) return;
+        if (hasFiles && !supportsMedia(activeConfig, attachedFiles)) {
+            mediaUnavailable();
+            return;
+        }
 
         removeWelcome();
 
@@ -539,7 +570,8 @@
         // Clear the composer for the next message right away
         promptInput.value = "";
         promptInput.style.height = "auto";
-        clearAttachments();
+        // The message entry now owns these URLs until the conversation is released.
+        clearAttachments(false);
         updateSendButton();
 
         pendingQueue.push(item);
@@ -555,7 +587,7 @@
         if (generating) return;
 
         while (pendingQueue.length) {
-            const item = pendingQueue.shift();
+            const item = dequeue(pendingQueue);
             // No longer queued: drop badge/cancel, join the transcript
             item.bubbleEl.classList.remove("queued");
             const tag = item.bubbleEl.querySelector(".queue-tag");
@@ -580,6 +612,12 @@
         controller = new AbortController();
 
         try {
+            if (item.files.length && !supportsMedia(activeConfig, item.files)) {
+                mediaUnavailable();
+                aiContent.textContent = "Message not sent: this session accepts text only.";
+                return;
+            }
+
             // Build the multimodal prompt array; a text-only model gets a
             // plain string prompt (media can't be attached in that mode).
             let promptArg = item.text;
@@ -592,18 +630,12 @@
                 { signal: controller.signal }
             );
 
-            let completa = "";
-            let anterior = "";
+            const foldState = { text: "" };
 
             aiContent.classList.add("streaming");
 
             for await (const chunk of stream) {
-                if (anterior && chunk.startsWith(anterior)) {
-                    completa = chunk;
-                } else {
-                    completa += chunk;
-                }
-                anterior = completa;
+                const completa = foldChunk(foldState, chunk);
 
                 if (typingDots.parentNode) typingDots.remove();
                 aiContent.textContent = completa;
@@ -660,6 +692,48 @@
         return res.blob();
     }
 
+    async function stageConversation(obj) {
+        const entries = [];
+        const urls = new Set();
+        const initialPrompts = [{
+            role: "system",
+            content: "You are a helpful assistant. Continue the conversation below naturally."
+        }];
+
+        try {
+            for (const msg of obj.messages) {
+                if (msg.role === "user") {
+                    const entry = { role: "user", text: msg.text || "", mode: msg.mode || null, media: [] };
+                    entries.push(entry);
+
+                    for (const imported of (msg.media || [])) {
+                        const mime = imported.mime || "application/octet-stream";
+                        const blob = await dataUrlToBlob("data:" + mime + ";base64," + imported.data);
+                        const media = {
+                            type: imported.type,
+                            blob,
+                            name: imported.name || "file",
+                            url: URL.createObjectURL(blob),
+                        };
+                        entry.media.push(media);
+                        urls.add(media.url);
+                    }
+
+                    initialPrompts.push(buildImportedPrompt(entry, entry.media));
+                } else {
+                    const text = msg.text || "";
+                    entries.push({ role: "ai", text });
+                    initialPrompts.push({ role: "assistant", content: text });
+                }
+            }
+
+            return { entries, initialPrompts, urls };
+        } catch (error) {
+            for (const url of urls) URL.revokeObjectURL(url);
+            throw error;
+        }
+    }
+
     function timestampSlug() {
         const d = new Date();
         const p = n => String(n).padStart(2, "0");
@@ -713,78 +787,71 @@
     }
 
     async function importConversation(file) {
-        if (generating || pendingQueue.length) return;
+        if (generating || pendingQueue.length || importing) return;
+        importing = true;
+        importBtn.disabled = true;
 
-        let obj;
+        let staged = null;
+        let committed = false;
         try {
-            obj = JSON.parse(await file.text());
-        } catch (error) {
-            console.error(error);
-            setStatus("Invalid conversation file", "err");
-            return;
-        }
+            let obj;
+            try {
+                obj = JSON.parse(await file.text());
+            } catch (error) {
+                console.error(error);
+                setStatus("Invalid conversation file", "err");
+                return;
+            }
 
-        if (!obj || obj.app !== "chat-local" || !Array.isArray(obj.messages)) {
-            setStatus("Invalid conversation file", "err");
-            return;
-        }
+            if (!isValidConversation(obj)) {
+                setStatus("Invalid conversation file", "err");
+                return;
+            }
 
-        // Reset the current conversation
-        session = null;
-        chat.innerHTML = "";
-        transcript.length = 0;
-        clearAttachments();
+            staged = await stageConversation(obj);
 
-        try {
-            const initialPrompts = [{
-                role: "system",
-                content: "You are a helpful assistant. Continue the conversation below naturally."
-            }];
+            let importedSession;
+            let contextRestored = true;
+            try {
+                importedSession = await createSession({ initialPrompts: staged.initialPrompts });
+            } catch (contextError) {
+                console.warn("initialPrompts rejected, starting fresh session:", contextError);
+                contextRestored = false;
+                importedSession = await createSession();
+            }
 
-            for (const msg of obj.messages) {
-                if (msg.role === "user") {
-                    // Decode media back to blobs for previews, transcript and session
-                    const media = [];
-                    const promptContent = [];
+            releaseMedia(transcript);
+            session = importedSession;
+            chat.innerHTML = "";
+            transcript.length = 0;
+            transcript.push(...staged.entries);
+            // Ownership moved to the new transcript; keep these URLs even if
+            // a later DOM operation fails while rendering the imported view.
+            committed = true;
+            clearAttachments();
 
-                    if (msg.text) promptContent.push({ type: "text", value: msg.text });
-                    for (const m of (msg.media || [])) {
-                        const blob = await dataUrlToBlob("data:" + (m.mime || "") + ";base64," + m.data);
-                        media.push({ type: m.type, blob, name: m.name || "file", url: URL.createObjectURL(blob) });
-                        promptContent.push({ type: m.type, value: blob });
-                    }
-
-                    const entry = { role: "user", text: msg.text || "", mode: msg.mode || null, media };
-                    transcript.push(entry);
-                    createUserMessage(entry);
-
-                    initialPrompts.push({ role: "user", content: promptContent });
-                } else if (msg.role === "ai") {
-                    const text = msg.text || "";
-                    transcript.push({ role: "ai", text });
-                    createMessage("ai", text);
-                    initialPrompts.push({ role: "assistant", content: text });
-                }
+            for (const entry of transcript) {
+                if (entry.role === "user") createUserMessage(entry);
+                else createMessage("ai", entry.text);
             }
 
             exportBtn.disabled = transcript.length === 0;
             chat.scrollTop = chat.scrollHeight;
-
-            // Recreate the session with the imported context when supported
-            try {
-                session = await createSession({ initialPrompts });
-                setStatus("Conversation imported — context restored", "ok");
-            } catch (contextError) {
-                console.warn("initialPrompts rejected, starting fresh session:", contextError);
-                session = await createSession();
-                setStatus("Conversation imported (context not kept)", "warn");
-            }
-
+            setStatus(
+                contextRestored ? "Conversation imported — context restored" : "Conversation imported (context not kept)",
+                contextRestored ? "ok" : "warn"
+            );
             updateSendButton();
             promptInput.focus();
         } catch (error) {
             console.error("Import error:", error);
             setStatus("Import error", "err");
+        } finally {
+            if (!committed && staged) {
+                for (const url of staged.urls) URL.revokeObjectURL(url);
+            }
+            importing = false;
+            importBtn.disabled = false;
         }
     }
 

@@ -1,34 +1,58 @@
-// test.js — one runnable test for the streaming chunk-fold logic (run: node test.js)
-// ponytail: mirrors the inline logic in app.js sendMessage() — keep in sync
+// test.js — runnable tests for shared chat logic (run: node test.js)
 "use strict";
 
 const assert = require("node:assert");
-
-function fold(chunks) {
-    let completa = "";
-    let anterior = "";
-    for (const chunk of chunks) {
-        if (anterior && chunk.startsWith(anterior)) {
-            completa = chunk;   // accumulated: chunk holds full text so far
-        } else {
-            completa += chunk;  // incremental: chunk is only the new delta
-        }
-        anterior = completa;
-    }
-    return completa;
-}
+const {
+    foldChunks,
+    buildPromptContent,
+    buildImportedPrompt,
+    supportsMedia,
+    isValidConversation,
+    dequeue,
+    removeQueuedItem,
+    drainQueue,
+} = require("./chat-logic.js");
 
 // incremental chunks (Gemini Nano default): each chunk is a delta
 assert.strictEqual(
-    fold(["Hel", "lo, ", "wor", "ld!"]),
+    foldChunks(["Hel", "lo, ", "wor", "ld!"]),
     "Hello, world!"
 );
 
 // accumulated chunks: each chunk repeats everything so far
 assert.strictEqual(
-    fold(["Hel", "Hello, ", "Hello, wor", "Hello, world!"]),
+    foldChunks(["Hel", "Hello, ", "Hello, wor", "Hello, world!"]),
     "Hello, world!"
 );
+
+// ---- shared prompt construction and capability checks ----
+const image = { type: "image", blob: { name: "image" } };
+const audio = { type: "audio", blob: { name: "audio" } };
+const ocrPrompt = buildPromptContent("ignored", [image], true, false);
+assert.strictEqual(ocrPrompt[0].value, "Extract all text from this image. Return only the text content, nothing else.");
+assert.strictEqual(ocrPrompt[1].type, "image");
+
+const transcribePrompt = buildPromptContent("ignored", [audio], false, true);
+assert.strictEqual(transcribePrompt[0].value, "Transcribe all speech from this audio. Return only the transcription, nothing else.");
+assert.strictEqual(transcribePrompt[1].type, "audio");
+
+const importedPrompt = buildImportedPrompt(
+    { text: "ignored", mode: "both" },
+    [image, audio]
+);
+assert.strictEqual(importedPrompt.role, "user");
+assert.strictEqual(importedPrompt.content[0].value, "Extract all text from this image AND transcribe all speech from this audio. Return both.");
+assert.deepStrictEqual(importedPrompt.content.slice(1).map(item => item.type), ["image", "audio"]);
+
+const textOnly = { inputs: [{ type: "text" }] };
+const multimodal = { inputs: [{ type: "text" }, { type: "image" }, { type: "audio" }] };
+assert.strictEqual(supportsMedia(textOnly, []), true);
+assert.strictEqual(supportsMedia(textOnly, [image]), false);
+assert.strictEqual(supportsMedia(multimodal, [image, audio]), true);
+assert.strictEqual(isValidConversation({ app: "chat-local", messages: [] }), true);
+assert.strictEqual(isValidConversation({ app: "chat-local", version: 2, messages: [] }), false);
+assert.strictEqual(isValidConversation({ app: "chat-local", messages: [{ role: "user", mode: "unknown" }] }), false);
+assert.strictEqual(isValidConversation({ app: "chat-local", messages: [{ role: "user", media: [{ type: "video", data: "x" }] }] }), false);
 
 // ---- export/import round-trip: payload shape ----
 // Mirrors the schema in app.js exportConversation/importConversation.
@@ -55,49 +79,16 @@ assert.deepStrictEqual(
     "png"
 );
 
-// ---- queue semantics: FIFO order, cancel-by-id, clear ----
-// Mirrors the pendingQueue logic in app.js (send/runQueue/cancelQueued/clearQueue).
+// ---- queue semantics: helpers used by app.js ----
 {
-    const pendingQueue = [];
-    const pushed = [];   // transcript order (what the model actually saw)
-    const removed = [];  // bubbles removed from the "DOM"
-
-    function enqueue(id, generating) {
-        pendingQueue.push({ id });
-        return generating ? "queued" : "run";
-    }
-    function cancelQueued(id) {
-        const idx = pendingQueue.findIndex(i => i.id === id);
-        if (idx === -1) return;
-        const [item] = pendingQueue.splice(idx, 1);
-        removed.push(item.id);
-    }
-    function clearQueue() {
-        while (pendingQueue.length) cancelQueued(pendingQueue[0].id);
-    }
-    function runQueue() {
-        while (pendingQueue.length) pushed.push(pendingQueue.shift().id);
-    }
-
-    // send while generating → queued; FIFO preserved
-    assert.strictEqual(enqueue("a", true), "queued");
-    assert.strictEqual(enqueue("b", true), "queued");
-    // cancel the middle one of three
-    enqueue("c", true);
-    cancelQueued("b");
-    assert.deepStrictEqual(pendingQueue.map(i => i.id), ["a", "c"]);
-    // cancelled item never reaches the transcript
-    runQueue();
-    assert.deepStrictEqual(pushed, ["a", "c"]);
-
-    // clear all
-    enqueue("x", true); enqueue("y", true);
-    clearQueue();
+    const pendingQueue = [{ id: "a" }, { id: "b" }, { id: "c" }];
+    assert.strictEqual(dequeue(pendingQueue).id, "a");
+    assert.strictEqual(removeQueuedItem(pendingQueue, "b").id, "b");
+    assert.deepStrictEqual(pendingQueue.map(item => item.id), ["c"]);
+    assert.strictEqual(removeQueuedItem(pendingQueue, "nope"), null);
+    pendingQueue.push({ id: "x" }, { id: "y" });
+    assert.deepStrictEqual(drainQueue(pendingQueue).map(item => item.id), ["c", "x", "y"]);
     assert.strictEqual(pendingQueue.length, 0);
-    assert.deepStrictEqual(removed, ["b", "x", "y"]);
-
-    // cancel on empty queue is a no-op
-    cancelQueued("nope");
 }
 
-console.log("OK: streaming chunk logic + export/import payload round-trip + queue semantics");
+console.log("OK: shared streaming, prompt, capability, export/import payload, and queue logic");

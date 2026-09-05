@@ -30,9 +30,9 @@
         return mb >= 1024 ? fmtGB(bytes) : Math.round(mb) + " MB";
     };
 
-    function setChip(el, html, cls, title) {
+    function setChip(el, text, cls, title) {
         el.className = "stat stat--" + cls;
-        el.innerHTML = html;
+        el.textContent = text;
         el.title = title;
         el.hidden = false;
     }

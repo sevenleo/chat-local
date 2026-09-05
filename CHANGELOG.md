@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/) and versioning follows [SemVer](https://semver.org/).
 
+## [1.9.1] - 2026-09-05
+
+### Fixed
+- Server binds to `127.0.0.1` so the local static files and exported conversations
+  are not exposed to the LAN by default.
+- Text-only sessions now reject unsupported media before sending it to the Prompt API.
+- Conversation imports stage media, context and session creation before replacing the
+  current conversation; imported OCR/Transcribe prompts preserve their instructions.
+- Sent-message Blob URLs remain valid for previews and are released when the
+  conversation is replaced.
+- Attachment names are rendered as text, and shared logic is now exercised directly
+  by the Node test file.
+
 ## [1.9.0] - 2026-09-05
 
 ### Removed
