@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/) and versioning follows [SemVer](https://semver.org/).
 
+## [1.15.2] - 2026-09-10
+
+### Changed
+- Renamed the main page to `index.html` and made the server's root URL the
+  documented entry point.
+
 ## [1.15.1] - 2026-09-10
 
 ### Fixed
@@ -335,7 +341,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) and versioning fo
 ## [1.1.0] - 2026-09-03
 
 ### Added
-- Split the monolithic `chat.html` into `chat.html` + `style.css` + `app.js`.
+- Split the monolithic entry page into `index.html` + `style.css` + `app.js`.
 - Design system in `style.css`: CSS custom properties, refined dark theme, subtle emerald accent.
 - Status pill with visual states (ready / warn / error / idle) and pulsing indicator dot.
 - Typing indicator (animated dots) shown while the model thinks.

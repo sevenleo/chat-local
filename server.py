@@ -2,7 +2,7 @@
 server.py — static file server + local system-stats endpoint for chat-local.
 
 Usage:
-    python server.py                  → http://localhost:8000/chat.html
+    python server.py                  → http://localhost:8000/
     python server.py --port 9000
 
 Optional (enables the footer's real system stats):
@@ -141,7 +141,7 @@ def main():
     httpd = ThreadingHTTPServer(("127.0.0.1", args.port), handler)
     httpd.daemon_threads = True
 
-    print(f"Serving at http://localhost:{args.port}/chat.html")
+    print(f"Serving at http://localhost:{args.port}/")
     print(f"  psutil: {'yes' if psutil else 'NO — pip install psutil (system CPU/RAM)'}")
     print(f"  nvidia-smi: {'found' if shutil.which('nvidia-smi') else 'not found (GPU/VRAM unavailable)'}")
 

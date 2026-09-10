@@ -1,6 +1,6 @@
 # Chrome Local AI Chat
 
-**v1.15.1**
+**v1.15.2**
 
 A small, local-first chat interface for testing the browser's built-in **Prompt API** with Gemini Nano. The browser runs the model on-device; this project provides the UI, media handling, conversation queue, import/export, and optional local system metrics.
 
@@ -89,7 +89,7 @@ From the project directory:
 python server.py
 ```
 
-Open [http://127.0.0.1:8000/chat.html](http://127.0.0.1:8000/chat.html).
+Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/).
 
 To use a different local port:
 
@@ -119,7 +119,7 @@ The script only targets Python processes running this project's `server.py`, inc
 
 ### Opening without Python
 
-The static files can be served by another local HTTP server. The chat still works if the browser exposes the Prompt API, but `server.py`-backed CPU/RAM/GPU/VRAM metrics will not be available. Opening `chat.html` directly with `file://` is also possible for basic static inspection, although browser security and Prompt API restrictions may prevent model access.
+The static files can be served by another local HTTP server. The chat still works if the browser exposes the Prompt API, but `server.py`-backed CPU/RAM/GPU/VRAM metrics will not be available. Opening `index.html` directly with `file://` is also possible for basic static inspection, although browser security and Prompt API restrictions may prevent model access.
 
 ## How to use
 
@@ -234,7 +234,7 @@ Import is staged before the current conversation is replaced:
 
 ```text
 chat-local/
-├── chat.html       # Page structure, controls, file inputs, and script loading
+├── index.html      # Page structure, controls, file inputs, and script loading
 ├── style.css       # Responsive graphite/emerald UI; no CSS framework
 ├── favicon.svg     # Local AI Chat diamond favicon
 ├── app.js          # UI state, model sessions, media, streaming, queue, import/export
@@ -344,7 +344,7 @@ python server.py --help
 ### Manual browser verification
 
 1. Start `python server.py`.
-2. Open `http://127.0.0.1:8000/chat.html` in a supported browser.
+2. Open `http://127.0.0.1:8000/` in a supported browser.
 3. Test the model status and download flow.
 4. Verify text generation, Stop, and queued messages.
 5. Verify image/audio attachment behavior at the active capability level.
