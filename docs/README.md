@@ -1,6 +1,6 @@
-# Chrome Local AI Chat
+# Local Chat
 
-**v1.15.2**
+**v1.16.0**
 
 A small, local-first chat interface for testing the browser's built-in **Prompt API** with Gemini Nano. The browser runs the model on-device; this project provides the UI, media handling, conversation queue, import/export, and optional local system metrics.
 
@@ -38,7 +38,8 @@ No external AI service or API key is required.
 - OCR mode for image text extraction, optionally combined with a manual request.
 - Transcribe mode for speech transcription, optionally combined with a manual request.
 - Mixed OCR + transcription mode when both media types are attached.
-- Retractable menu with model checks, model download, import, export, Chrome on-device internals shortcut, and performance-metric controls.
+- Installable PWA with a standalone window and operating-system app entry when the browser supports installation.
+- Retractable menu with model checks, model download, PWA installation, import, export, Chrome on-device internals shortcut, and performance-metric controls.
 - Self-contained JSON conversation export with media embedded as base64.
 - Conversation import that attempts to restore the model context through `initialPrompts`.
 - Responsive dark interface with keyboard focus states, sticky streaming scroll, attachment previews, and a matching favicon.
@@ -89,7 +90,11 @@ From the project directory:
 python server.py
 ```
 
-Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/).
+The page opens automatically in the default browser at [http://127.0.0.1:8000/](http://127.0.0.1:8000/).
+
+While the terminal is open, press `c` to stop all running `server.py` sessions
+using the same cleanup as `stop_server.py`, or press `r` to restart the current
+server with the same arguments.
 
 To use a different local port:
 
@@ -97,7 +102,11 @@ To use a different local port:
 python server.py --port 9000
 ```
 
+The page also opens automatically at `http://127.0.0.1:9000/`.
+
 The server binds to loopback (`127.0.0.1`), so the page and files it serves are not exposed to the LAN by default.
+
+The root page can be installed as a web app from the menu when the browser exposes its native PWA installation prompt. The **Install app** item remains hidden in unsupported browsers and when the page is opened with `file://`. Localhost is a trusted origin for service workers; production deployments must use HTTPS.
 
 To enable real CPU/RAM metrics:
 
@@ -124,13 +133,14 @@ The static files can be served by another local HTTP server. The chat still work
 ## How to use
 
 1. Open the menu button in the upper-right corner.
-2. Select **Test model** to check availability. A successful check creates a session and reports the active capability level.
-3. If the model is downloadable, select **Download model** and wait for the progress percentage to finish.
-4. Type a prompt and press **Enter**. Use **Shift+Enter** for a newline.
-5. Add media with **🖼️** or **🎵**, paste a screenshot with `Ctrl+V`, or drag image/audio files anywhere onto the page.
-6. Enable **OCR** for image text extraction, **Transcribe** for audio transcription, or both when both media types are attached.
-7. Send the message. The assistant response streams into the chat.
-8. Use the copy button beside any textual message to copy its original text or Markdown to the clipboard, including URLs and formatting markers.
+2. If **Install app** is visible, select it to install Local Chat as a standalone application.
+3. Select **Test model** to check availability. A successful check creates a session and reports the active capability level.
+4. If the model is downloadable, select **Download model** and wait for the progress percentage to finish.
+5. Type a prompt and press **Enter**. Use **Shift+Enter** for a newline.
+6. Add media with **🖼️** or **🎵**, paste a screenshot with `Ctrl+V`, or drag image/audio files anywhere onto the page.
+7. Enable **OCR** for image text extraction, **Transcribe** for audio transcription, or both when both media types are attached.
+8. Send the message. The assistant response streams into the chat.
+9. Use the copy button beside any textual message to copy its original text or Markdown to the clipboard, including URLs and formatting markers.
 
 ### Queue controls
 
@@ -148,6 +158,7 @@ The composer remains usable while the model is generating:
 
 - **Test model:** checks model availability and creates a session if the model is already installed.
 - **Download model:** creates a session with a download-progress monitor.
+- **Install app:** opens the browser's native PWA installation prompt when installation is available. The installed app launches in a standalone window.
 - **Export:** downloads the current transcript as `chat-local-YYYY-MM-DD-HHmm.json`.
 - **Import:** loads a compatible JSON conversation and tries to restore its context.
 - **On-device internals:** shows Chrome's `chrome://on-device-internals/` diagnostics URL and copies it for pasting into the address bar; web pages cannot navigate directly to privileged `chrome://` pages.
@@ -236,7 +247,12 @@ Import is staged before the current conversation is replaced:
 chat-local/
 ├── index.html      # Page structure, controls, file inputs, and script loading
 ├── style.css       # Responsive graphite/emerald UI; no CSS framework
-├── favicon.svg     # Local AI Chat diamond favicon
+├── favicon.svg     # Local Chat diamond favicon
+├── icon-192.png    # PWA installation icon
+├── icon-512.png    # PWA installation icon
+├── manifest.json   # PWA identity, display mode, and install metadata
+├── sw.js           # App-shell cache and offline navigation fallback
+├── offline.html    # Service-worker navigation fallback
 ├── app.js          # UI state, model sessions, media, streaming, queue, import/export
 ├── chat-logic.js   # Pure shared helpers for app.js and test.js
 ├── sysstats.js     # Browser probes and optional same-origin /stats polling
@@ -333,7 +349,7 @@ Expected output:
 OK: shared streaming, prompt, capability, export/import payload, and queue logic
 ```
 
-The tests cover both streaming chunk styles, OCR/Transcribe prompt construction, media capability checks, import validation, the export payload shape, and queue semantics. They do not require a browser or a downloaded model.
+The tests cover both streaming chunk styles, OCR/Transcribe prompt construction, media capability checks, import validation, the export payload shape, queue semantics, and the PWA manifest/icon contract. They do not require a browser or a downloaded model.
 
 ### Inspect the local server options
 

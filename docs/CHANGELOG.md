@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/) and versioning follows [SemVer](https://semver.org/).
 
+## [1.16.0] - 2026-09-10
+
+### Added
+- Installable PWA support from the menu using the browser's native installation prompt.
+- Web app manifest, standalone display mode, raster installation icons, service-worker app-shell caching, and offline navigation fallback.
+
 ## [1.15.2] - 2026-09-10
 
 ### Changed
@@ -87,7 +93,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) and versioning fo
 - Retractable right-side menu for model testing, downloading, import and export.
 - **Show performance metrics** checkbox that hides the footer metrics and pauses
   browser probes, FPS sampling, memory reads and `/stats` polling.
-- Matching `favicon.svg` based on the Local AI Chat diamond mark.
+- Matching `favicon.svg` based on the Local Chat diamond mark.
 
 ### Changed
 - Reduced the empty-state message to a shorter local-first introduction.

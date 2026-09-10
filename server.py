@@ -15,11 +15,14 @@ falls back to browser-only proxies. Nothing else changes.
 import argparse
 import atexit
 import json
+import os
 import shutil
 import signal
 import subprocess
+import sys
 import threading
 import time
+import webbrowser
 from functools import partial
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 
@@ -131,6 +134,56 @@ class Handler(SimpleHTTPRequestHandler):
         super().do_GET()
 
 
+def _stop_other_servers():
+    """Reuse stop_server.py's process matching and termination behavior."""
+    from stop_server import find_servers, psutil as cleanup_psutil, stop_servers
+
+    if cleanup_psutil is None:
+        print(
+            "Este comando precisa do psutil para encerrar outras sessões. "
+            "Instale com: python -m pip install psutil"
+        )
+        return
+    stop_servers(find_servers())
+
+
+def _watch_terminal(stopping, on_command):
+    """Read c/r immediately from an interactive terminal."""
+    if not sys.stdin.isatty():
+        return
+
+    if os.name == "nt":
+        import msvcrt
+
+        while not stopping.is_set():
+            if not msvcrt.kbhit():
+                time.sleep(0.1)
+                continue
+            command = msvcrt.getwch().lower()
+            if command in ("\x00", "\xe0") and msvcrt.kbhit():
+                msvcrt.getwch()  # discard the second byte of an extended key
+            elif command in ("c", "r"):
+                on_command(command)
+        return
+
+    import select
+    import termios
+    import tty
+
+    fd = sys.stdin.fileno()
+    previous = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        while not stopping.is_set():
+            ready, _, _ = select.select([sys.stdin], [], [], 0.1)
+            if ready:
+                command = sys.stdin.read(1).lower()
+                if command in ("c", "r"):
+                    on_command(command)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, previous)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Serve chat-local")
     parser.add_argument("--port", type=int, default=8000, help="port (default: 8000)")
@@ -141,9 +194,14 @@ def main():
     httpd = ThreadingHTTPServer(("127.0.0.1", args.port), handler)
     httpd.daemon_threads = True
 
-    print(f"Serving at http://localhost:{args.port}/")
+    url = f"http://127.0.0.1:{args.port}/"
+    print(f"Serving at {url}")
+    browser_timer = threading.Timer(0.1, webbrowser.open, args=(url,))
+    browser_timer.daemon = True
+    browser_timer.start()
     print(f"  psutil: {'yes' if psutil else 'NO — pip install psutil (system CPU/RAM)'}")
     print(f"  nvidia-smi: {'found' if shutil.which('nvidia-smi') else 'not found (GPU/VRAM unavailable)'}")
+    print("  Pressione c para encerrar todas as sessões ou r para reiniciar.")
 
     # ---------- single-owner shutdown ----------
     # One exit path for every stop signal (Ctrl+C, taskkill, window close,
@@ -168,11 +226,33 @@ def main():
     # If something kills us the hard way, still close the socket at exit.
     atexit.register(lambda: (httpd.server_close() if not stopping.is_set() else None))
 
+    restart_requested = threading.Event()
+
+    def terminal_command(command):
+        if command == "c":
+            print("\nEncerrando todas as sessões do chat-local...")
+            _stop_other_servers()
+            shutdown()
+        elif command == "r":
+            print("\nReiniciando o servidor...")
+            restart_requested.set()
+            shutdown()
+
+    keyboard_thread = threading.Thread(
+        target=_watch_terminal,
+        args=(stopping, terminal_command),
+        daemon=True,
+    )
+    keyboard_thread.start()
+
     try:
         httpd.serve_forever(poll_interval=0.5)
     finally:
         httpd.server_close()
         print("\nServer stopped — port released.")
+
+    if restart_requested.is_set():
+        os.execv(sys.executable, [sys.executable, *sys.argv])
 
     # python instances left over from earlier test runs (e.g. ports 8202/8203)
     # are separate processes: use  taskkill /F /IM python.exe  to clear them.

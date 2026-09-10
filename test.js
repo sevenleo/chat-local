@@ -2,6 +2,9 @@
 "use strict";
 
 const assert = require("node:assert");
+const fs = require("node:fs");
+const path = require("node:path");
+const manifest = require("./manifest.json");
 const {
     foldChunks,
     renderMarkdown,
@@ -13,6 +16,20 @@ const {
     removeQueuedItem,
     drainQueue,
 } = require("./chat-logic.js");
+
+// ---- PWA manifest ----
+assert.strictEqual(manifest.name, "Local Chat");
+assert.strictEqual(manifest.start_url, "/");
+assert.strictEqual(manifest.scope, "/");
+assert.strictEqual(manifest.display, "standalone");
+assert.deepStrictEqual(
+    new Set(manifest.icons.map(icon => icon.sizes)),
+    new Set(["192x192", "512x512"])
+);
+for (const icon of manifest.icons) {
+    const iconPath = path.join(__dirname, icon.src.replace(/^\/+/, ""));
+    assert.ok(fs.statSync(iconPath).size > 0, `${icon.src} must not be empty`);
+}
 
 // incremental chunks (Gemini Nano default): each chunk is a delta
 assert.strictEqual(

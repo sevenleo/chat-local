@@ -3,9 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Local AI Chat</title>
+    <title>Local Chat</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="style.css?v=1.15.1">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4ca883">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Local Chat">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="stylesheet" href="style.css?v=1.16.0">
 </head>
 <body>
 
@@ -13,7 +19,7 @@
         <header>
             <div class="brand">
                 <span class="brand-mark">◆</span>
-                <span>Local AI Chat</span>
+                <span>Local Chat</span>
             </div>
 
             <div class="header-actions">
@@ -95,6 +101,11 @@
             <button id="downloadModel" class="menu-action" type="button">
                 <span class="menu-action__label">Download model</span>
                 <span class="menu-action__icon" aria-hidden="true">↓</span>
+            </button>
+            <button id="installAppButton" class="menu-action" type="button"
+                    title="Install Local Chat as an app" hidden>
+                <span class="menu-action__label">Install app</span>
+                <span class="menu-action__icon" aria-hidden="true">⇩</span>
             </button>
             <button id="exportBtn" class="menu-action" type="button" disabled title="Save conversation as JSON">
                 <span class="menu-action__label">Export</span>
@@ -181,9 +192,9 @@
         </form>
     </dialog>
 
-    <script defer src="chat-logic.js?v=1.15.1"></script>
-    <script defer src="app.js?v=1.15.1"></script>
-    <script defer src="sysstats.js?v=1.15.1"></script>
+    <script defer src="chat-logic.js?v=1.16.0"></script>
+    <script defer src="app.js?v=1.16.0"></script>
+    <script defer src="sysstats.js?v=1.16.0"></script>
 
 </body>
 </html>

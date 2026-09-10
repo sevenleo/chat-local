@@ -1,5 +1,5 @@
 /* =========================================================
-   Local AI Chat — app.js
+   Local Chat — app.js
    Chrome Built-in AI · streaming · multimodal · no framework
    ========================================================= */
 
@@ -27,6 +27,7 @@
     let finishing = false;
     let finalized = false;
     let activeGeneration = null;
+    let deferredInstallPrompt = null;
     let attachedFiles = [];  // { id, type: "image"|"audio", blob, name, url }
     const pendingQueue = []; // { id, text, mode, ocr, trans, files, entry, bubbleEl }
 
@@ -51,6 +52,7 @@
     const finishChatDialog    = document.getElementById("finishChatDialog");
     const checkModelButton    = document.getElementById("checkModel");
     const downloadModelButton = document.getElementById("downloadModel");
+    const installAppButton    = document.getElementById("installAppButton");
     const onDeviceInternalsButton = document.getElementById("onDeviceInternalsButton");
     const onDeviceInternalsDialog = document.getElementById("onDeviceInternalsDialog");
     const onDeviceInternalsUrl = document.getElementById("onDeviceInternalsUrl");
@@ -92,6 +94,45 @@
         else if (restoreFocus) menuToggle.focus();
     }
 
+    function isStandaloneApp() {
+        return window.matchMedia("(display-mode: standalone)").matches ||
+            window.navigator.standalone === true;
+    }
+
+    function hideInstallAppButton() {
+        deferredInstallPrompt = null;
+        installAppButton.hidden = true;
+    }
+
+    async function promptInstallApp() {
+        if (!deferredInstallPrompt) return;
+
+        const installPrompt = deferredInstallPrompt;
+        hideInstallAppButton();
+
+        try {
+            await installPrompt.prompt();
+            const choice = await installPrompt.userChoice;
+            if (choice.outcome === "accepted") setStatus("App installed", "ok");
+        } catch (error) {
+            console.error("App installation error:", error);
+            setStatus("App installation failed", "err");
+        }
+    }
+
+    function registerServiceWorker() {
+        if (!("serviceWorker" in navigator) || !window.isSecureContext) return;
+
+        window.addEventListener("load", async () => {
+            try {
+                const registration = await navigator.serviceWorker.register("./sw.js");
+                console.log("[App] Service worker registered, scope:", registration.scope);
+            } catch (error) {
+                console.error("[App] Service worker registration failed:", error);
+            }
+        }, { once: true });
+    }
+
     async function copyOnDeviceInternalsUrl() {
         try {
             await navigator.clipboard.writeText(onDeviceInternalsUrl.value);
@@ -118,7 +159,7 @@
         div.className = "welcome";
         div.innerHTML =
             '<div class="welcome-icon">◆</div>' +
-            "<h2>Local AI Chat</h2>" +
+            "<h2>Local Chat</h2>" +
             "<p>Your browser&#8217;s built-in AI.</p>" +
             "<p class='welcome-note'>No API keys. No cloud.</p>";
         chat.appendChild(div);
@@ -1290,6 +1331,18 @@
     });
 
     /* ---------- Events ---------- */
+    window.addEventListener("beforeinstallprompt", event => {
+        event.preventDefault();
+        if (isStandaloneApp()) return;
+        deferredInstallPrompt = event;
+        installAppButton.hidden = false;
+    });
+
+    window.addEventListener("appinstalled", () => {
+        hideInstallAppButton();
+        setStatus("App installed", "ok");
+    });
+
     menuToggle.addEventListener("click", () => {
         setMenuOpen(menuToggle.getAttribute("aria-expanded") !== "true");
     });
@@ -1317,6 +1370,10 @@
     });
     checkModelButton.addEventListener("click", checkModel);
     downloadModelButton.addEventListener("click", downloadModel);
+    installAppButton.addEventListener("click", async () => {
+        setMenuOpen(false, false);
+        await promptInstallApp();
+    });
     onDeviceInternalsButton.addEventListener("click", () => {
         setMenuOpen(false, false);
         onDeviceInternalsDialog.showModal();
@@ -1350,6 +1407,8 @@
 
     /* ---------- Init ---------- */
     async function init() {
+        registerServiceWorker();
+        if (isStandaloneApp()) hideInstallAppButton();
         renderWelcome();
 
         LanguageModel = resolveLanguageModel();
