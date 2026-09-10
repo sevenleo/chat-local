@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Local Chat</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4ca883">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Local Chat">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="stylesheet" href="style.css?v=1.16.0">
+</head>
+<body>
+
+    <div id="appShell">
+        <header>
+            <div class="brand">
+                <span class="brand-mark">◆</span>
+                <span>Local Chat</span>
+            </div>
+
+            <div class="header-actions">
+                <button id="newChatButton" class="new-chat-button" type="button"
+                        aria-label="Start a new chat" title="Start a new chat">
+                    <span class="new-chat-button__icon" aria-hidden="true">↺</span>
+                    <span class="new-chat-button__label">New chat</span>
+                </button>
+                <span id="status" class="status status--idle">Initializing...</span>
+                <button id="menuToggle" class="menu-toggle" type="button"
+                        aria-expanded="false" aria-controls="sideMenu" aria-label="Open menu"
+                        title="Open menu">
+                    <span aria-hidden="true"></span>
+                    <span aria-hidden="true"></span>
+                    <span aria-hidden="true"></span>
+                </button>
+            </div>
+        </header>
+
+        <main id="chat"></main>
+
+        <footer>
+            <div id="composer">
+                <div id="attachments" hidden></div>
+
+                <div id="input-area">
+                    <div id="tools">
+                        <button id="imageBtn" class="tool-btn" type="button"
+                                title="Add image" aria-label="Add image">🖼️</button>
+                        <button id="audioBtn" class="tool-btn" type="button"
+                                title="Add audio" aria-label="Add audio">🎵</button>
+                        <label id="ocrToggle" class="tool-toggle" hidden>
+                            <input type="checkbox" id="ocrOnly"> OCR
+                        </label>
+                        <label id="transToggle" class="tool-toggle" hidden>
+                            <input type="checkbox" id="transcribeOnly"> Transcribe
+                        </label>
+                    </div>
+
+                    <textarea id="prompt" rows="1" placeholder="Text / image / audio / drop an drop"></textarea>
+
+                    <div id="actions">
+                        <button id="send" disabled>Send</button>
+                        <button id="clearQueue" hidden title="Cancel all queued messages">Clear queue</button>
+                        <button id="stop">Stop</button>
+                    </div>
+                </div>
+
+                <input type="file" id="imageInput" accept="image/*" multiple hidden>
+                <input type="file" id="audioInput" accept="audio/*" multiple hidden>
+                <input type="file" id="importInput" accept=".json,application/json" hidden>
+            </div>
+
+            <div id="sysStats" class="sys-stats" hidden title="Browser metrics and optional server metrics">
+                <span id="statBrowserCpu" class="stat stat--na">FPS …</span>
+                <span id="statBrowserMem" class="stat stat--na">TAB …</span>
+                <span id="statCpu" class="stat" hidden>CPU …</span>
+                <span id="statMem" class="stat" hidden>RAM …</span>
+                <span id="statGpu" class="stat" hidden>GPU …</span>
+                <span id="statVram" class="stat" hidden>VRAM …</span>
+            </div>
+        </footer>
+    </div>
+
+    <aside id="sideMenu" class="side-menu" aria-labelledby="menuTitle" aria-hidden="true">
+        <div class="side-menu__header">
+            <div>
+                <p class="eyebrow">Controls</p>
+                <h2 id="menuTitle">Menu</h2>
+            </div>
+            <button id="menuClose" class="menu-close" type="button" aria-label="Close menu" title="Close menu">×</button>
+        </div>
+
+        <div class="menu-actions">
+            <button id="checkModel" class="menu-action" type="button">
+                <span class="menu-action__label">Test model</span>
+                <span class="menu-action__icon" aria-hidden="true">↗</span>
+            </button>
+            <button id="downloadModel" class="menu-action" type="button">
+                <span class="menu-action__label">Download model</span>
+                <span class="menu-action__icon" aria-hidden="true">↓</span>
+            </button>
+            <button id="installAppButton" class="menu-action" type="button"
+                    title="Install Local Chat as an app" hidden>
+                <span class="menu-action__label">Install app</span>
+                <span class="menu-action__icon" aria-hidden="true">⇩</span>
+            </button>
+            <button id="exportBtn" class="menu-action" type="button" disabled title="Save conversation as JSON">
+                <span class="menu-action__label">Export</span>
+                <span class="menu-action__icon" aria-hidden="true">↑</span>
+            </button>
+            <button id="importBtn" class="menu-action" type="button" title="Load a conversation JSON">
+                <span class="menu-action__label">Import</span>
+                <span class="menu-action__icon" aria-hidden="true">＋</span>
+            </button>
+            <button id="onDeviceInternalsButton" class="menu-action" type="button"
+                    title="Copy chrome://on-device-internals/ to the clipboard">
+                <span class="menu-action__label">On-device internals</span>
+                <span class="menu-action__icon" aria-hidden="true">↗</span>
+            </button>
+            <button id="finishChatButton" class="menu-action menu-action--danger" type="button"
+                    title="Stop the model and finish this chat">
+                <span class="menu-action__label">Finish chat</span>
+                <span class="menu-action__icon" aria-hidden="true">⏹</span>
+            </button>
+        </div>
+
+        <div class="menu-divider"></div>
+
+        <label class="settings-toggle" for="statsToggle">
+            <span>
+                <span class="settings-toggle__title">Show performance metrics</span>
+                <span class="settings-toggle__hint">Footer metrics and status collection</span>
+            </span>
+            <input type="checkbox" id="statsToggle" checked>
+        </label>
+    </aside>
+
+    <dialog id="newChatDialog" class="new-chat-dialog" aria-labelledby="newChatTitle"
+            aria-describedby="newChatDescription">
+        <form method="dialog" class="new-chat-dialog__panel">
+            <p class="eyebrow">Conversation</p>
+            <h2 id="newChatTitle">Start a new chat?</h2>
+            <p id="newChatDescription">
+                This will clear the conversation, queued messages, draft, and attachments.
+            </p>
+            <div class="new-chat-dialog__actions">
+                <button class="new-chat-dialog__button new-chat-dialog__button--cancel"
+                        value="cancel" type="submit">Cancel</button>
+                <button class="new-chat-dialog__button new-chat-dialog__button--confirm"
+                        value="confirm" type="submit">New chat</button>
+            </div>
+        </form>
+    </dialog>
+
+    <dialog id="finishChatDialog" class="new-chat-dialog" aria-labelledby="finishChatTitle"
+            aria-describedby="finishChatDescription">
+        <form method="dialog" class="new-chat-dialog__panel">
+            <p class="eyebrow">End session</p>
+            <h2 id="finishChatTitle">Finish this chat?</h2>
+            <p id="finishChatDescription">
+                This stops generation, destroys the model session, clears this chat and the site's stored data, then tries to close the tab. The browser's built-in model cache may remain.
+            </p>
+            <div class="new-chat-dialog__actions">
+                <button class="new-chat-dialog__button new-chat-dialog__button--cancel"
+                        value="cancel" type="submit">Cancel</button>
+                <button class="new-chat-dialog__button new-chat-dialog__button--confirm"
+                        value="confirm" type="submit">Finish chat</button>
+            </div>
+        </form>
+    </dialog>
+
+    <dialog id="onDeviceInternalsDialog" class="new-chat-dialog"
+            aria-labelledby="onDeviceInternalsTitle" aria-describedby="onDeviceInternalsDescription">
+        <form method="dialog" class="new-chat-dialog__panel">
+            <p class="eyebrow">Chrome diagnostics</p>
+            <h2 id="onDeviceInternalsTitle">Open on-device internals</h2>
+            <p id="onDeviceInternalsDescription">
+                Chrome blocks web pages from opening privileged <code>chrome://</code> pages. Copy this URL and paste it into the address bar.
+            </p>
+            <input id="onDeviceInternalsUrl" class="new-chat-dialog__url" type="text"
+                   value="chrome://on-device-internals/" readonly aria-label="On-device internals URL">
+            <div class="new-chat-dialog__actions">
+                <button class="new-chat-dialog__button new-chat-dialog__button--cancel"
+                        value="cancel" type="submit">Close</button>
+                <button id="copyOnDeviceInternalsButton"
+                        class="new-chat-dialog__button new-chat-dialog__button--confirm"
+                        type="button">Copy URL</button>
+            </div>
+        </form>
+    </dialog>
+
+    <script defer src="chat-logic.js?v=1.16.0"></script>
+    <script defer src="app.js?v=1.16.0"></script>
+    <script defer src="sysstats.js?v=1.16.0"></script>
+
+</body>
+</html>
