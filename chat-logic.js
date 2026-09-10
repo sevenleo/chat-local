@@ -279,16 +279,31 @@
 
     function buildPromptContent(userText, files, ocr, trans) {
         const content = [];
+        const request = String(userText || "").trim();
+        let instruction;
 
         if (ocr && !trans) {
-            content.push({ type: "text", value: "Extract all text from this image. Return only the text content, nothing else." });
+            instruction = request
+                ? "Extract all text from this image. Use the extracted text together with the user's request below to answer with full context."
+                : "Extract all text from this image. Return only the text content, nothing else.";
         } else if (trans && !ocr) {
-            content.push({ type: "text", value: "Transcribe all speech from this audio. Return only the transcription, nothing else." });
+            instruction = request
+                ? "Transcribe all speech from this audio. Use the transcription together with the user's request below to answer with full context."
+                : "Transcribe all speech from this audio. Return only the transcription, nothing else.";
         } else if (ocr && trans) {
-            content.push({ type: "text", value: "Extract all text from this image AND transcribe all speech from this audio. Return both." });
+            instruction = request
+                ? "Extract all text from this image AND transcribe all speech from this audio. Use both results together with the user's request below to answer with full context."
+                : "Extract all text from this image AND transcribe all speech from this audio. Return both.";
+        } else if (request && files.length) {
+            instruction = "Use all attached media together with the user's request below to answer with full context.";
         } else {
-            content.push({ type: "text", value: userText || "Describe what is in this media." });
+            instruction = request || "Describe what is in this media.";
         }
+
+        if (request && (ocr || trans || files.length)) {
+            instruction += "\n\nUser request:\n" + request;
+        }
+        content.push({ type: "text", value: instruction });
 
         for (const file of files) {
             content.push({ type: file.type, value: file.blob });

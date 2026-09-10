@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/) and versioning follows [SemVer](https://semver.org/).
 
+## [1.15.1] - 2026-09-10
+
+### Fixed
+- OCR and Transcribe now preserve manual text alongside image/audio extraction
+  instructions, including combined mode and imported conversations.
+- Image or audio attachments now remain part of the full context when a manual
+  request is sent without enabling OCR or Transcribe.
+
 ## [1.15.0] - 2026-09-05
 
 ### Added

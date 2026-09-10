@@ -1,6 +1,6 @@
 # Chrome Local AI Chat
 
-**v1.15.0**
+**v1.15.1**
 
 A small, local-first chat interface for testing the browser's built-in **Prompt API** with Gemini Nano. The browser runs the model on-device; this project provides the UI, media handling, conversation queue, import/export, and optional local system metrics.
 
@@ -35,8 +35,8 @@ No external AI service or API key is required.
 - Stop generation while a response is streaming.
 - Message queue: keep sending while the model is busy, skip the current response, cancel individual queued messages, or clear the whole queue.
 - Image and audio attachments through file pickers, clipboard paste, or drag and drop.
-- OCR mode for image-only text extraction.
-- Transcribe mode for audio-only speech transcription.
+- OCR mode for image text extraction, optionally combined with a manual request.
+- Transcribe mode for speech transcription, optionally combined with a manual request.
 - Mixed OCR + transcription mode when both media types are attached.
 - Retractable menu with model checks, model download, import, export, Chrome on-device internals shortcut, and performance-metric controls.
 - Self-contained JSON conversation export with media embedded as base64.
@@ -214,7 +214,7 @@ HTML is escaped by default. Only <u> and <br> are allowed through, and links/ima
 
 ### Media and modes
 
-Normal prompts use the user's text, or `Describe what is in this media.` when media is attached without text. OCR and Transcribe replace that instruction with a strict extraction prompt. The browser does not perform OCR or speech recognition itself; the on-device model receives the media and performs the interpretation.
+Normal prompts use the user's text, or `Describe what is in this media.` when media is attached without text. When text and media are both provided, the request and every attachment are sent together so the model can answer using the full context, even with OCR and Transcribe disabled. OCR and Transcribe use strict extraction prompts when no manual text is provided; with manual text, the extraction/transcription and request are combined the same way. The browser does not perform OCR or speech recognition itself; the on-device model receives the media and performs the interpretation.
 
 Before sending, the app checks the active session's `expectedInputs`. Unsupported media is rejected locally instead of being sent to a text-only session.
 

@@ -71,19 +71,41 @@ assert.match(renderMarkdown(String.fromCharCode(92) + "033[31mred" + String.from
 const image = { type: "image", blob: { name: "image" } };
 const audio = { type: "audio", blob: { name: "audio" } };
 const ocrPrompt = buildPromptContent("ignored", [image], true, false);
-assert.strictEqual(ocrPrompt[0].value, "Extract all text from this image. Return only the text content, nothing else.");
+assert.match(ocrPrompt[0].value, /Use the extracted text together with the user's request/);
+assert.match(ocrPrompt[0].value, /User request:\nignored/);
 assert.strictEqual(ocrPrompt[1].type, "image");
 
+const ocrOnlyPrompt = buildPromptContent("", [image], true, false);
+assert.strictEqual(ocrOnlyPrompt[0].value, "Extract all text from this image. Return only the text content, nothing else.");
+assert.strictEqual(ocrOnlyPrompt[1].type, "image");
+
 const transcribePrompt = buildPromptContent("ignored", [audio], false, true);
-assert.strictEqual(transcribePrompt[0].value, "Transcribe all speech from this audio. Return only the transcription, nothing else.");
+assert.match(transcribePrompt[0].value, /Use the transcription together with the user's request/);
+assert.match(transcribePrompt[0].value, /User request:\nignored/);
 assert.strictEqual(transcribePrompt[1].type, "audio");
+
+const bothPrompt = buildPromptContent("Summarize the findings", [image, audio], true, true);
+assert.match(bothPrompt[0].value, /Use both results together with the user's request/);
+assert.match(bothPrompt[0].value, /User request:\nSummarize the findings/);
+assert.deepStrictEqual(bothPrompt.slice(1).map(item => item.type), ["image", "audio"]);
+
+const imageWithTextPrompt = buildPromptContent("What does this document mean?", [image], false, false);
+assert.match(imageWithTextPrompt[0].value, /Use all attached media together with the user's request/);
+assert.match(imageWithTextPrompt[0].value, /User request:\nWhat does this document mean\?/);
+assert.strictEqual(imageWithTextPrompt[1].type, "image");
+
+const audioWithTextPrompt = buildPromptContent("Summarize the spoken content", [audio], false, false);
+assert.match(audioWithTextPrompt[0].value, /Use all attached media together with the user's request/);
+assert.match(audioWithTextPrompt[0].value, /User request:\nSummarize the spoken content/);
+assert.strictEqual(audioWithTextPrompt[1].type, "audio");
 
 const importedPrompt = buildImportedPrompt(
     { text: "ignored", mode: "both" },
     [image, audio]
 );
 assert.strictEqual(importedPrompt.role, "user");
-assert.strictEqual(importedPrompt.content[0].value, "Extract all text from this image AND transcribe all speech from this audio. Return both.");
+assert.match(importedPrompt.content[0].value, /Use both results together with the user's request/);
+assert.match(importedPrompt.content[0].value, /User request:\nignored/);
 assert.deepStrictEqual(importedPrompt.content.slice(1).map(item => item.type), ["image", "audio"]);
 
 const textOnly = { inputs: [{ type: "text" }] };
